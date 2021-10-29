@@ -1,1 +1,4 @@
 .[dev]
+
+# Lock version dependencies here if needed
+numpy==1.21.3
