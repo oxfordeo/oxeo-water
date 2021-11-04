@@ -1,10 +1,7 @@
 import numpy as np
-
-from oxeo.water.metrics import segmentation_area
-
-
 import pytest
 
+from oxeo.water.metrics import pearson, segmentation_area
 
 segmentation = np.array([[0, 0, 0, 1], [0, 1, 1, 1], [0, 0, 1, 1]])
 segmentation_seq = np.array(
@@ -13,6 +10,9 @@ segmentation_seq = np.array(
         [[0, 0, 0, 0], [0, 1, 0, 1], [0, 0, 1, 1]],
     ]
 )
+
+x = [6, 10, 2, 1, 56]
+y = [62, 108, 23, 11, 568]
 
 
 def test_segmentation_area_with_pixel_unit():
@@ -33,7 +33,14 @@ def test_segmentation_area_with_meters_unit(seg, unit, resolution, expected):
 
 @pytest.mark.parametrize(
     "seg,unit,resolution, expected",
-    [(segmentation_seq, "pixel", None, 10), (segmentation_seq, "meter", 10, 100),],
+    [
+        (segmentation_seq, "pixel", None, 10),
+        (segmentation_seq, "meter", 10, 100),
+    ],
 )
 def test_segmentation_area_with_sequence(seg, unit, resolution, expected):
     assert segmentation_area(seg, unit, resolution) == expected
+
+
+def test_pearson():
+    assert pearson(x, y) == pytest.approx(0.99, 0.1)
