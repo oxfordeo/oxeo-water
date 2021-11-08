@@ -33,20 +33,11 @@ def pekel_bands(arr: np.ndarray, constellation) -> PekelBands:
     bands = ["red", "green", "blue", "nir", "swir1", "swir2", "derived:ndvi", "alpha"]
     bands.append(cloud)
 
-    scales = [
-        [0, 10000, 0, 1],  # red
-        [0, 10000, 0, 1],  # green
-        [0, 10000, 0, 1],  # blue
-        [0, 10000, 0, 1],  # nir
-        [0, 10000, 0, 1],  # swir1
-        [0, 10000, 0, 1],  # swir2
-        [0, 65535, -1, 1],  # ndvi
-        None,  # alpha
-        None,  # cloud-mask
-    ]
-    if "sentinel" not in constellation:
-        bands.append("tirs1")
-        scales.append([0, 16383, -32, 64])
+    # Scale sat-extractor bands to 0-1
+    for i in range(6):
+
+        a = np.clip(arr[..., i], 0, 10000)
+        arr[..., i] = np.interp(a, (0, 10000), (0, 1))
 
     arr = fill_nodata_single(arr, alpha_band=bands.index("alpha"), erode=True)
 

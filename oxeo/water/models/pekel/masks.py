@@ -447,7 +447,7 @@ def confusion5a(b):
 
 def confusion5b(b):
     """Class spectral overlap (manly snow and ice)"""
-    if "tirs1" not in b.keys():
+    if b.tirs1 is None:
         return b.hue > -100  # always true
     else:
         return (
@@ -522,7 +522,7 @@ def confusion5c(b):
 
 def confusion6(b):
     """Thermal range"""
-    if "tirs1" not in b.keys():
+    if b.tirs1 is None:
         return b.hue > -100  # always true
     else:
         return (b.tirs1 > 264) & (b.tirs1 < 310)
