@@ -34,12 +34,12 @@ def test_segmentation_area_with_meters_unit(seg, unit, resolution, expected):
 @pytest.mark.parametrize(
     "seg,unit,resolution, expected",
     [
-        (segmentation_seq, "pixel", None, 10),
-        (segmentation_seq, "meter", 10, 100),
+        (segmentation_seq, "pixel", None, [6, 4]),
+        (segmentation_seq, "meter", 10, [60, 40]),
     ],
 )
 def test_segmentation_area_with_sequence(seg, unit, resolution, expected):
-    assert segmentation_area(seg, unit, resolution) == expected
+    assert (segmentation_area(seg, unit, resolution) == expected).all()
 
 
 def test_pearson():

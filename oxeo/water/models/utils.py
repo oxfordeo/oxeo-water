@@ -86,7 +86,7 @@ def merge_masks(
 
         # I need to do this because zarr doesn't support indexing like numpy
         # So I bring all the dates until the last one and then a filter them.
-        arr = arr[: date_indices_vals[-1] + 1]
+        arr = arr[: date_indices_vals[-1] + 1].astype(np.uint8)
         full_mask[:, start_y:end_y, start_x:end_x] = arr[date_indices_vals, :]
 
     # Return the mask and tha common dates in the given range.
