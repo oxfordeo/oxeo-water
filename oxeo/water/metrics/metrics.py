@@ -9,7 +9,7 @@ UNITS = ["pixel", "meter"]
 def segmentation_area(
     seg: np.ndarray, unit: str = "pixel", resolution: Optional[int] = float
 ) -> float:
-    """Get the total area of a segmentation
+    """Get the total area of a segmentation (Nx..xHxW)
 
     Args:
         seg (np.ndarray): N dimensional binary segmentation.
@@ -17,10 +17,10 @@ def segmentation_area(
         resolution (Optional[int]): if unit is meters the seg resolution must be present
 
     Returns:
-        float: total area
+        float: total area (Nx...)
     """
     assert unit in UNITS, f"unit must be one of {UNITS}"
-    total_area = seg[seg > 0].sum()
+    total_area = (seg > 0).sum(axis=(-2, -1))
 
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
