@@ -36,6 +36,7 @@ def merge_masks(
     end_date: datetime,
     constellation: str = "sentinel-2",
     data: str = "weak_labels",
+    bands: List[int] = None,
 ):
     xy = [parse_xy(pp) for pp in patch_paths]
     x, y = list(zip(*xy))
@@ -49,14 +50,23 @@ def merge_masks(
     start_date_index = common_dates.index(nearest_start_date)
     end_date_index = common_dates.index(nearest_end_date)
 
-    # Create the fullmask array to contain the patches
-    full_mask = np.zeros(
-        (
+    if data == "weak_labels":
+        shape = (
             end_date_index - start_date_index,
             (max_y + 1) * patch_size,
             (max_x + 1) * patch_size,
         )
-    )
+    else:
+        shape = (
+            end_date_index - start_date_index,
+            len(bands),
+            (max_y + 1) * patch_size,
+            (max_x + 1) * patch_size,
+        )
+        print(shape)
+
+    # Create the fullmask array to contain the patches
+    full_mask = np.zeros(shape)
 
     for i, pp in enumerate(patch_paths):
         # Get the dates for that patch
@@ -86,8 +96,14 @@ def merge_masks(
 
         # I need to do this because zarr doesn't support indexing like numpy
         # So I bring all the dates until the last one and then a filter them.
-        arr = arr[: date_indices_vals[-1] + 1].astype(np.uint8)
-        full_mask[:, start_y:end_y, start_x:end_x] = arr[date_indices_vals, :]
+        arr = arr[: date_indices_vals[-1] + 1]
+        arr = arr[date_indices_vals, :]
+        if bands:
+            arr = arr[:, bands, :, :].astype(np.uint16)
+            full_mask[:, :, start_y:end_y, start_x:end_x] = arr
+        else:
+            arr = arr.astype(np.int8)
+            full_mask[..., start_y:end_y, start_x:end_x] = arr
 
     # Return the mask and tha common dates in the given range.
     return full_mask, list(date_indices.keys())
