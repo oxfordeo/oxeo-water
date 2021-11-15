@@ -19,8 +19,8 @@ class SegmentationDataset(Dataset):
     def __getitem__(self, index: int):
         patch_path = self.patch_paths[index]
 
-        data = np.load(f"{patch_path}/data.npz")["arr_0"].astype(np.int16)
-        label = np.load(f"{patch_path}/weak_labels.npz")["arr_0"]
+        data = np.load(f"{patch_path}/data.npy").astype(np.int16)
+        label = np.load(f"{patch_path}/weak_labels.npy")
         sample = {
             "data": data,
             "label": label,
