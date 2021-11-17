@@ -11,10 +11,6 @@ from oxeo.water.datamodules import SegmentationDataModule
 from oxeo.water.models.segmentation import Segmentation2D
 
 if __name__ == "__main__":
-    """
-    ## 6 mins / patch
-    python train_embeddings_3D.py --gpus -1 --batch_size 8 --num_workers 8 --cache_path /mnt/cache --online_val_every_n_epoch 4
-    """
 
     pl.seed_everything(1337)
 

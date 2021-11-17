@@ -1,9 +1,14 @@
 from argparse import ArgumentParser
 
+import numpy as np
 import torch
+from loguru import logger
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
+from skimage.util.shape import view_as_blocks
 from torch.nn import BCEWithLogitsLoss
+
+from oxeo.water.models import Predictor
 
 
 class Segmentation2D(LightningModule):
@@ -112,3 +117,67 @@ class Segmentation2D(LightningModule):
         )
 
         return parser
+
+
+class Segmentation2DPredictor(Predictor):
+    def __init__(
+        self,
+        batch_size=128,
+        ckpt_path: str = None,
+        input_channels: int = 13,
+        num_classes: int = 1,
+    ):
+        self.model = Segmentation2D.load_from_checkpoint(
+            ckpt_path, input_channels=input_channels, num_classes=num_classes
+        )
+        self.batch_size = batch_size
+        self.model.eval().cuda()
+
+    def predict(self, input):
+        logger.info("Moving model to GPU.")
+        self.model.cuda()
+        input_view = (
+            view_as_blocks(input, (input.shape[0], input.shape[1], 100, 100))
+            .reshape(-1, input.shape[0], input.shape[1], 100, 100)
+            .astype(np.int16)
+        )
+        preds = []
+        for revisit in range(input_view.shape[1]):
+            for patch in range(0, input_view.shape[0], self.batch_size):
+                input_tensor = torch.as_tensor(
+                    input_view[patch : patch + self.batch_size, revisit, :, :]
+                ).float()
+                preds.extend(
+                    torch.sigmoid(self.model(input_tensor.cuda())).data.cpu().numpy()
+                )
+
+        logger.info("Moving model to CPU.")
+        self.model.cpu()
+        preds = np.array(preds)
+        preds = preds.reshape(
+            (input_view.shape[0], input_view.shape[1], 100, 100), order="F"
+        )
+        return reconstruct_from_patches(
+            preds, input_view.shape[1], 100, input.shape[-2], input.shape[-1]
+        )
+
+
+def reconstruct_from_patches(
+    images, revisits, patch_size, target_size_rows, target_size_cols
+):
+    block_n = 0
+    h_stack = []
+    rec_img = []
+    for revisit in range(revisits):
+        v_stack = []
+        for _ in range(target_size_rows // patch_size):
+            h_stack = []
+            for _ in range(target_size_cols // patch_size):
+                h_stack.append(images[block_n, revisit, :, :])
+                block_n += 1
+
+            v_stack.append(np.hstack(h_stack))
+
+        rec_img.append(np.vstack(v_stack))
+        block_n = 0
+    return np.array(rec_img)
