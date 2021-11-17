@@ -4,6 +4,10 @@ from typing import List
 
 import numpy as np
 import zarr
+from loguru import logger
+from tqdm import tqdm
+
+from .base import Predictor
 
 
 def parse_xy(patch_path: str):
@@ -56,6 +60,7 @@ def merge_masks(
             (max_y + 1) * patch_size,
             (max_x + 1) * patch_size,
         )
+        full_mask = np.zeros(shape, dtype=np.uint8)
     else:
         shape = (
             end_date_index - start_date_index,
@@ -63,17 +68,15 @@ def merge_masks(
             (max_y + 1) * patch_size,
             (max_x + 1) * patch_size,
         )
-        print(shape)
-
-    # Create the fullmask array to contain the patches
-    full_mask = np.zeros(shape)
+        # Create the fullmask array to contain the patches
+        full_mask = np.zeros(shape, dtype=np.uint16)
 
     for i, pp in enumerate(patch_paths):
         # Get the dates for that patch
         dates = zarr.open(f"gs://{pp}/{constellation}/timestamps", "r")[:]
         dates = zarr_dates_to_datetime(dates)
 
-        # This is tricky. Here I check for the dates that all patches share
+        # This is tricky. Here I check for the dates that all patches share.
         # I get the indices of those dates for each of the patches. So I can
         # Extract the correct patches at the end.
         date_indices = {d: index for index, d in enumerate(dates) if d in common_dates}
@@ -88,22 +91,98 @@ def merge_masks(
         date_indices_vals = list(date_indices.values())
 
         # Once I have the indices I can get the patch and append it to the fullmask
-        arr = zarr.open(f"gs://{pp}/{constellation}/{data}", "r")
+        arr = zarr.open(f"gs://{pp}/{constellation}/{data}", "r", dtype=np.uint16)
         start_y = (max_y - xy[i][1]) * patch_size
         end_y = start_y + patch_size
         start_x = xy[i][0] * patch_size
         end_x = start_x + patch_size
 
         # I need to do this because zarr doesn't support indexing like numpy
-        # So I bring all the dates until the last one and then a filter them.
-        arr = arr[: date_indices_vals[-1] + 1]
-        arr = arr[date_indices_vals, :]
+        # So I bring all the dates until the last one and then I filter them.
+        # arr = arr[: date_indices_vals[-1] + 1]
+        # arr = arr[date_indices_vals, :]
         if bands:
-            arr = arr[:, bands, :, :].astype(np.uint16)
-            full_mask[:, :, start_y:end_y, start_x:end_x] = arr
+            for i, d_i in tqdm(enumerate(date_indices_vals)):
+                arr_d = arr[d_i].astype(np.uint16)
+                arr_d = arr_d[bands, :, :]
+                full_mask[i, :, start_y:end_y, start_x:end_x] = arr_d
         else:
             arr = arr.astype(np.int8)
             full_mask[..., start_y:end_y, start_x:end_x] = arr
 
-    # Return the mask and tha common dates in the given range.
+    # Return the mask and the common dates in the given range.
     return full_mask, list(date_indices.keys())
+
+
+def predict_lake(
+    predictor: Predictor,
+    patch_paths: List[str],
+    patch_size: int,
+    start_date: datetime,
+    end_date: datetime,
+    constellation: str = "sentinel-2",
+    threshold: float = 0.5,
+    date_batch: int = 100,
+):
+    logger.info(f"Getting full lake data for between {start_date} and {end_date}")
+    xy = [parse_xy(pp) for pp in patch_paths]
+    x, y = list(zip(*xy))
+    max_x = max(x)
+    max_y = max(y)
+
+    common_dates = get_dates_in_common(patch_paths, constellation)
+    nearest_start_date = nearest(common_dates, start_date)
+    nearest_end_date = nearest(common_dates, end_date)
+
+    common_dates = common_dates[
+        common_dates.index(nearest_start_date) : common_dates.index(nearest_end_date)
+    ]
+    full_preds = []
+    for i in range(0, len(common_dates), date_batch):
+        current_common_dates = common_dates[i : i + date_batch]
+
+        shape = (
+            len(current_common_dates),
+            (max_y + 1) * patch_size,
+            (max_x + 1) * patch_size,
+        )
+
+        full_lake_pred = np.zeros(shape, dtype=np.uint8)
+
+        for i, pp in enumerate(patch_paths):
+            # Get the dates for that patch
+            dates = zarr.open(f"gs://{pp}/{constellation}/timestamps", "r")[:]
+            dates = zarr_dates_to_datetime(dates)
+
+            # This is tricky. Here I check for the dates that all patches share.
+            # I get the indices of those dates for each of the patches. So I can
+            # Extract the correct patches at the end.
+            date_indices = {
+                d: index for index, d in enumerate(dates) if d in current_common_dates
+            }
+
+            keys = list(date_indices.keys())
+            start_date_index = keys.index(current_common_dates[0])
+            end_date_index = keys.index(current_common_dates[-1])
+
+            date_indices = dict(
+                itertools.islice(
+                    date_indices.items(), start_date_index, end_date_index + 1
+                )
+            )
+            date_indices_vals = list(date_indices.values())
+
+            # Once I have the indices I can get the patch and append it to the fullmask
+            arr = zarr.open(f"gs://{pp}/{constellation}/data", "r", dtype=np.uint16)
+            start_y = (max_y - xy[i][1]) * patch_size
+            end_y = start_y + patch_size
+            start_x = xy[i][0] * patch_size
+            end_x = start_x + patch_size
+
+            arr_d = arr[: date_indices_vals[-1] + 1]
+            arr_d = arr_d[date_indices_vals, :]
+            preds = predictor.predict(arr_d)
+            full_lake_pred[..., start_y:end_y, start_x:end_x] = preds >= threshold
+            del arr_d, arr
+            full_preds.extend(full_lake_pred)
+    return np.array(full_preds), common_dates
