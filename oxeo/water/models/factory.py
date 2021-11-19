@@ -2,7 +2,7 @@ from oxeo.water.models import ModelDef
 from oxeo.water.models.pekel import PekelPredictor
 
 
-def model_factory(name: str):
+def model_factory(name: str) -> ModelDef:
     model_list = {
         "pekel": ModelDef(
             predictor=PekelPredictor,

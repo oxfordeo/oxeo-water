@@ -7,8 +7,10 @@ UNITS = ["pixel", "meter"]
 
 
 def segmentation_area(
-    seg: np.ndarray, unit: str = "pixel", resolution: Optional[int] = float
-) -> float:
+    seg: np.ndarray,
+    unit: str = "pixel",
+    resolution: Optional[int] = 1,
+) -> np.ndarray:
     """Get the total area of a segmentation (Nx..xHxW)
 
     Args:
