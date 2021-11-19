@@ -29,11 +29,15 @@ def zarr_dates_to_datetime(dates: List[str]):
     return [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
 
 
+date_earliest = datetime(1900, 1, 1)
+date_latest = datetime(2200, 1, 1)
+
+
 def merge_masks(
     patch_paths: List[str],
     patch_size: int,
-    start_date: datetime,
-    end_date: datetime,
+    start_date: datetime = date_earliest,
+    end_date: datetime = date_latest,
     constellation: str = "sentinel-2",
     data: str = "weak_labels",
 ):
@@ -88,6 +92,7 @@ def merge_masks(
         # So I bring all the dates until the last one and then a filter them.
         arr = arr[: date_indices_vals[-1] + 1].astype(np.uint8)
         full_mask[:, start_y:end_y, start_x:end_x] = arr[date_indices_vals, :]
+        full_mask = full_mask.astype(np.uint8)
 
     # Return the mask and tha common dates in the given range.
     return full_mask, list(date_indices.keys())
