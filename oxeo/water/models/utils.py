@@ -5,7 +5,6 @@ from typing import List
 import numpy as np
 import zarr
 from loguru import logger
-from tqdm import tqdm
 
 from .base import Predictor
 
