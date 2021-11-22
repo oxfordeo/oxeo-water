@@ -43,6 +43,9 @@ def merge_masks(
 ):
     xy = [parse_xy(pp) for pp in patch_paths]
     x, y = list(zip(*xy))
+    # Hack to deal with changed tile naming system
+    xy = [(p[0] - min(x), p[1] - min(y)) for p in xy]
+    x, y = list(zip(*xy))
     max_x = max(x)
     max_y = max(y)
 
