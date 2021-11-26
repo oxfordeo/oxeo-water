@@ -1,6 +1,6 @@
 import itertools
 from datetime import datetime
-from typing import List
+from typing import List, Set
 
 import numpy as np
 import zarr
@@ -10,8 +10,10 @@ def parse_xy(patch_path: str):
     return [int(x) for x in patch_path.split("_")[-2:]]
 
 
-def get_dates_in_common(patch_paths: List[str], constellation: str = "sentinel-2"):
-    dates = set()
+def get_dates_in_common(
+    patch_paths: List[str], constellation: str = "sentinel-2"
+) -> List[datetime]:
+    dates: Set[str] = set()
     for pp in patch_paths:
         date = zarr.open(f"gs://{pp}/{constellation}/timestamps", "r")[:]
         if len(dates) == 0:
@@ -25,7 +27,7 @@ def nearest(items: List[datetime], pivot: datetime):
     return min(items, key=lambda x: abs(x - pivot))
 
 
-def zarr_dates_to_datetime(dates: List[str]):
+def zarr_dates_to_datetime(dates: Set[str]) -> List[datetime]:
     return [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
 
 
