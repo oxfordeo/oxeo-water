@@ -1,13 +1,13 @@
 from typing import Optional
 
 import numpy as np
-from attr import frozen
+from attr import define
 from rasterio.fill import fillnodata
 from skimage.color import rgb2hsv
 from skimage.morphology import erosion
 
 
-@frozen
+@define
 class PekelBands:
     alpha: np.ndarray
     blue: np.ndarray
