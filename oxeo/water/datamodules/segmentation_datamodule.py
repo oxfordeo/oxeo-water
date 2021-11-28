@@ -3,7 +3,7 @@ from typing import Any
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
-from .datasets.segmentation_dataset import SegmentationDataset
+from .datasets.virtual_dataset import VirtualDataset
 
 
 class SegmentationDataModule(LightningDataModule):
@@ -29,12 +29,12 @@ class SegmentationDataModule(LightningDataModule):
             stage ([type], optional): pl stage. Defaults to None.
         """
 
-        self.train_dataset = SegmentationDataset(
+        self.train_dataset = VirtualDataset(
             patch_paths=self.train_paths,
             transform=self.transforms,
         )
 
-        self.val_dataset = SegmentationDataset(
+        self.val_dataset = VirtualDataset(
             patch_paths=self.val_paths,
             transform=self.transforms,
         )
