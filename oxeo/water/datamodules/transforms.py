@@ -1,7 +1,12 @@
-from fsspec import asyn
+class SelectBands:
+    """Computes sample virtual arrays to numpy array"""
 
-asyn.iothread[0] = None
-asyn.loop[0] = None
+    def __init__(self, bands):
+        self.bands = bands
+
+    def __call__(self, sample):
+        sample["data"] = sample["data"].sel({"bands": self.bands})
+        return sample
 
 
 class SelectConstellation:
