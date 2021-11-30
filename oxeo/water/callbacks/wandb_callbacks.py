@@ -1,8 +1,7 @@
 import torch
+import wandb
 from pytorch_lightning import Callback, Trainer
 from pytorch_lightning.loggers import LoggerCollection, WandbLogger
-
-import wandb
 
 
 def get_wandb_logger(trainer: Trainer) -> WandbLogger:
@@ -61,7 +60,7 @@ class LogImagePredictions(Callback):
                 {
                     "inputs": [
                         wandb.Image(x, caption="input")
-                        for x in val_imgs[: self.num_samples, [3, 2, 1], :, :]
+                        for x in val_imgs[: self.num_samples, :, :, :]
                     ],
                     "y_preds": [
                         wandb.Image(x.float(), caption="y_pred")
