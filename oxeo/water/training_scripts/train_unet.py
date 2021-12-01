@@ -1,12 +1,14 @@
 import os
+import sys
 from argparse import ArgumentParser
 
 import pandas as pd
 import pytorch_lightning as pl
+from loguru import logger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from satextractor.models import constellation_info
-from satools.io import ConstellationData
+from satools.io import ConstellationData, create_index_map
 from torchvision.transforms import Compose
 
 from oxeo.water.callbacks.wandb_callbacks import LogImagePredictions
@@ -32,9 +34,10 @@ if __name__ == "__main__":
     parser.add_argument("--visible_gpus", default="0", type=str)
     parser.add_argument("--checkpoint_dir", default="checkpoints", type=str)
     parser.add_argument("--input_channels", default=3, type=int)
-    parser.add_argument("--premodel_ckpt", default=None, type=str)
-    parser.add_argument("--train_index_map", default=None, type=str)
-    parser.add_argument("--val_index_map", default=None, type=str)
+    parser.add_argument("--train_start_date", default=None, type=str)
+    parser.add_argument("--train_end_date", default=None, type=str)
+    parser.add_argument("--val_start_date", default=None, type=str)
+    parser.add_argument("--val_end_date", default=None, type=str)
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.visible_gpus
@@ -74,30 +77,47 @@ if __name__ == "__main__":
         width=1000,
     )
 
-    train_index_map = pd.read_csv(args.train_index_map, header=None).values
-    val_index_map = pd.read_csv(args.val_index_map, header=None).values
-
-    patch_size = 100
-
     train_constellation_regions = {"data": [[data_sen2]], "label": [[data_labels]]}
     val_constellation_regions = {"data": [[data_sen2]], "label": [[data_labels]]}
+
+    if not os.path.exists(args.train_index_map):
+        logger.info("Index Maps don't exist. Creating them...")
+        train_index_map = create_index_map(
+            train_constellation_regions,
+            date_range=(args.train_start_date, args.train_end_date),
+            patch_size=args.patch_size,
+            output=args.train_index_map,
+        )
+
+        val_index_map = create_index_map(
+            val_constellation_regions,
+            date_range=(args.val_start_date, args.val_end_date),
+            patch_size=args.patch_size,
+            output=args.val_index_map,
+        )
+        logger.info("==== PLEASE RUN AGAIN THIS SCRIPT NOW ====")
+        sys.exit()
+
+    train_index_map = pd.read_csv(args.train_index_map, header=None).values
+    val_index_map = pd.read_csv(args.val_index_map, header=None).values
 
     dm = ConstellationDataModule(
         train_constellation_regions=train_constellation_regions,
         val_constellation_regions=val_constellation_regions,
-        patch_size=patch_size,
+        patch_size=args.patch_size,
         train_index_map=train_index_map,
         val_index_map=val_index_map,
         preprocess=Compose(
             [
                 oxtransforms.SelectConstellation("sentinel-2"),
-                oxtransforms.SelectBands(["B04", "B03", "B02"]),
+                # oxtransforms.SelectBands(["B04", "B03", "B02"]),
                 oxtransforms.Compute(),
             ]
         ),
         transforms=None,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        # label_delta=args.label_delta,
     )
 
     # Train ##################################################
@@ -107,9 +127,9 @@ if __name__ == "__main__":
     wandb_logger = WandbLogger(name=run, project=args.project, entity="oxeo")
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
+        monitor="val/loss",
         dirpath=args.checkpoint_dir,
-        filename=run + "-{epoch:02d}-{val_loss:.3f}",
+        filename=run + "-{epoch:02d}-{val/loss:.3f}",
     )
 
     trainer = pl.Trainer.from_argparse_args(

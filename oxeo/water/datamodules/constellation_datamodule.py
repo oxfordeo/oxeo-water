@@ -28,8 +28,6 @@ class ConstellationDataModule(LightningDataModule):
         train_constellation_regions: Dict[str, List[List[ConstellationData]]],
         val_constellation_regions: Dict[str, List[List[ConstellationData]]] = None,
         patch_size: int = 100,
-        train_date_range: Tuple[str, str] = None,
-        val_date_range: Tuple[str, str] = None,
         train_index_map: Tuple[int, str, int, int] = None,
         val_index_map: Tuple[int, str, int, int] = None,
         preprocess: Optional[Callable] = None,

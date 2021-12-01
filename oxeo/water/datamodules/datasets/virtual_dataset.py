@@ -16,6 +16,7 @@ class VirtualDataset(Dataset):
         preprocess: Optional[Callable] = None,
         transform: Optional[Callable] = None,
         index_map: List[Tuple[int, str, int, int]] = None,
+        label_delta: int = None,
     ):
         """Pytorch Dataset to load from virtual xarray datasets
 
@@ -28,6 +29,8 @@ class VirtualDataset(Dataset):
             index_map: List[Tuple[int, str, int, int]]: Index to each patch in the datasets. Use create_index_map function
                                 to create it. It must be done outside of the VirtualDataset because otherwise
                                 there are tilt problems with ffspec in multiprocessing.
+            label_delta: int : If set takes actual label - delta range of labels, and puts uncertainty values
+                                in max(label_deltas) - labels
 
         """
         super().__init__()
@@ -37,9 +40,10 @@ class VirtualDataset(Dataset):
         self.preprocess = preprocess
         self.transform = transform
         self.index_map = index_map
+        self.label_delta = label_delta
 
-        dates = [item[1] for item in self.index_map]
-        self.date_range = (min(dates), max(dates))
+        self.dates = [item[1] for item in self.index_map]
+        self.date_range = (min(self.dates), max(self.dates))
 
     def __getitem__(self, index: int):
         dataset_index, timestamp_index, i, j = self.index_map[index]
@@ -63,6 +67,23 @@ class VirtualDataset(Dataset):
             label = self.get_dataset_patch(
                 self.label_virtual_datasets[dataset_index], timestamp_index, i, j
             )
+
+            if self.label_delta:
+                actual_timestamp_index = self.dates.index(timestamp_index)
+                if actual_timestamp_index > self.label_delta:
+                    past_timestamp = self.dates[
+                        actual_timestamp_index - self.label_delta
+                    ]
+
+                    label = self.get_dataset_patch(
+                        self.label_virtual_datasets[dataset_index],
+                        slice(past_timestamp, timestamp_index),
+                        i,
+                        j,
+                    )
+
+                    print(label)
+
             sample["label"] = label
 
         if self.preprocess:

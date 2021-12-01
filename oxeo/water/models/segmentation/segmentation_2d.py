@@ -61,19 +61,18 @@ class Segmentation2D(LightningModule):
 
     def training_step(self, batch, batch_nb):
         img = batch["data"].float()
-        label = batch["label"].unsqueeze(1)  # (B, 1, H, W)
+        label = batch["label"]  # (B, 1, H, W)
 
         pred = self(img)
         loss = self.criterion(pred, label.float())
 
-        torch.sigmoid(pred)
         self.log("train/loss", loss, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
         img = batch["data"].float()
-        label = batch["label"].unsqueeze(1)
+        label = batch["label"]
 
         pred = self(img)
 
