@@ -1,21 +1,51 @@
 import itertools
 from datetime import datetime
-from typing import List, Set
+from typing import List, Set, Tuple, Union
 
 import numpy as np
 import zarr
+from attr import frozen
+from satextractor.models import Tile
+from shapely.geometry import MultiPolygon, Polygon
 
 
-def parse_xy(patch_path: str):
-    return [int(x) for x in patch_path.split("_")[-2:]]
+@frozen
+class TilePath:
+    tile: Tile
+    constellation: str
+    bucket: str = "oxeo-water"
+    root: str = "prod"
+
+    @property
+    def path(self):
+        return f"{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+
+
+@frozen
+class WaterBody:
+    area_id: int
+    name: str
+    geometry: Union[Polygon, MultiPolygon]
+    paths: List[TilePath]
+
+
+@frozen
+class TimeseriesMask:
+    mask: np.ndarray  # TxHxW
+    dates: List[datetime]
+    constellation: str
+
+
+def parse_xy(tile: Tile) -> Tuple[int, int]:
+    return (tile.xloc, tile.yloc)
 
 
 def get_dates_in_common(
-    patch_paths: List[str], constellation: str = "sentinel-2"
+    patch_paths: List[TilePath], constellation: str
 ) -> List[datetime]:
     dates: Set[str] = set()
     for pp in patch_paths:
-        date = zarr.open(f"gs://{pp}/{constellation}/timestamps", "r")[:]
+        date = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
         if len(dates) == 0:
             dates = set(date)
         else:
@@ -31,25 +61,53 @@ def zarr_dates_to_datetime(dates: Set[str]) -> List[datetime]:
     return [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
 
 
+def get_patch_size(patch_paths: List[TilePath]) -> int:
+    sizes = []
+    for patch in patch_paths:
+        z = zarr.open(f"gs://{patch.path}/data", "r")
+        x, y = z.shape[2:]
+        assert x == y, "Must use square patches"
+        sizes.append(x)
+    assert len(set(sizes)) == 1, "All sizes must be the same"
+    return sizes[0]
+
+
 date_earliest = datetime(1900, 1, 1)
 date_latest = datetime(2200, 1, 1)
 
 
-def merge_masks(
-    patch_paths: List[str],
-    patch_size: int,
+def merge_masks_all_constellations(
+    waterbody: WaterBody,
+    model_name: str,
+) -> List[TimeseriesMask]:
+    constellations = list({t.constellation for t in waterbody.paths})
+    mask_list = [
+        merge_masks_one_constellation(waterbody, model_name, constellation)
+        for constellation in constellations
+    ]
+    return mask_list
+
+
+def merge_masks_one_constellation(
+    waterbody: WaterBody,
+    model_name: str,
+    constellation: str,
     start_date: datetime = date_earliest,
     end_date: datetime = date_latest,
-    constellation: str = "sentinel-2",
-    data: str = "weak_labels",
 ):
-    xy = [parse_xy(pp) for pp in patch_paths]
+    patch_paths: List[TilePath] = [
+        t for t in waterbody.paths if t.constellation == constellation
+    ]
+    xy = [parse_xy(pp.tile) for pp in patch_paths]
     x, y = list(zip(*xy))
+    # TODO improve this
     # Hack to deal with changed tile naming system
     xy = [(p[0] - min(x), p[1] - min(y)) for p in xy]
     x, y = list(zip(*xy))
     max_x = max(x)
     max_y = max(y)
+
+    patch_size = get_patch_size(patch_paths)
 
     common_dates = get_dates_in_common(patch_paths, constellation)
     nearest_start_date = nearest(common_dates, start_date)
@@ -69,7 +127,7 @@ def merge_masks(
 
     for i, pp in enumerate(patch_paths):
         # Get the dates for that patch
-        dates = zarr.open(f"gs://{pp}/{constellation}/timestamps", "r")[:]
+        dates = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
         dates = zarr_dates_to_datetime(dates)
 
         # This is tricky. Here I check for the dates that all patches share
@@ -87,7 +145,7 @@ def merge_masks(
         date_indices_vals = list(date_indices.values())
 
         # Once I have the indices I can get the patch and append it to the fullmask
-        arr = zarr.open(f"gs://{pp}/{constellation}/{data}", "r")
+        arr = zarr.open(f"gs://{pp.path}/mask/{model_name}", "r")
         start_y = (max_y - xy[i][1]) * patch_size
         end_y = start_y + patch_size
         start_x = xy[i][0] * patch_size
@@ -100,4 +158,8 @@ def merge_masks(
         full_mask = full_mask.astype(np.uint8)
 
     # Return the mask and tha common dates in the given range.
-    return full_mask, list(date_indices.keys())
+    return TimeseriesMask(
+        mask=full_mask,
+        dates=list(date_indices.keys()),
+        constellation=constellation,
+    )
