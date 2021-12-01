@@ -1,9 +1,27 @@
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
+import pandas as pd
 from scipy import stats
 
+from oxeo.water.models.utils import TimeseriesMask
+
 UNITS = ["pixel", "meter"]
+
+
+def segmentation_area_multiple(segs: List[TimeseriesMask], **kwargs) -> pd.DataFrame:
+    dfs = []
+    for tsm in segs:
+        area = segmentation_area(tsm.mask, **kwargs)
+        df = pd.DataFrame(
+            data={
+                "date": tsm.dates,
+                "area": area,
+                "constellation": tsm.constellation,
+            }
+        )
+        dfs.append(df)
+    return pd.concat(dfs, axis=0)
 
 
 def segmentation_area(
