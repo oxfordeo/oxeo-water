@@ -34,6 +34,7 @@ class TimeseriesMask:
     mask: np.ndarray  # TxHxW
     dates: List[datetime]
     constellation: str
+    resolution: int
 
 
 def parse_xy(tile: Tile) -> Tuple[int, int]:
@@ -61,12 +62,22 @@ def zarr_dates_to_datetime(dates: Set[str]) -> List[datetime]:
     return [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
 
 
-def get_patch_size(patch_paths: List[TilePath]) -> int:
+def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
     sizes = []
     for patch in patch_paths:
         z = zarr.open(f"gs://{patch.path}/data", "r")
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"
+        sizes.append(x)
+    assert len(set(sizes)) == 1, "All sizes must be the same"
+    return sizes[0]
+
+
+def get_tile_size(tiles: List[Tile]) -> int:  # in metres
+    sizes = []
+    for tile in tiles:
+        x, y = tile.bbox_size_x, tile.bbox_size_y
+        assert x == y, "Must use square tiles"
         sizes.append(x)
     assert len(set(sizes)) == 1, "All sizes must be the same"
     return sizes[0]
@@ -96,7 +107,7 @@ def merge_masks_one_constellation(
     end_date: datetime = date_latest,
 ):
     patch_paths: List[TilePath] = [
-        t for t in waterbody.paths if t.constellation == constellation
+        pp for pp in waterbody.paths if pp.constellation == constellation
     ]
     xy = [parse_xy(pp.tile) for pp in patch_paths]
     x, y = list(zip(*xy))
@@ -108,6 +119,8 @@ def merge_masks_one_constellation(
     max_y = max(y)
 
     patch_size = get_patch_size(patch_paths)
+    tile_size = get_tile_size([pp.tile for pp in patch_paths])
+    resolution = int(patch_paths / tile_size)
 
     common_dates = get_dates_in_common(patch_paths, constellation)
     nearest_start_date = nearest(common_dates, start_date)
@@ -162,4 +175,5 @@ def merge_masks_one_constellation(
         mask=full_mask,
         dates=list(date_indices.keys()),
         constellation=constellation,
+        resolution=resolution,
     )

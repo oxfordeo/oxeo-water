@@ -9,10 +9,10 @@ from oxeo.water.models.utils import TimeseriesMask
 UNITS = ["pixel", "meter"]
 
 
-def segmentation_area_multiple(segs: List[TimeseriesMask], **kwargs) -> pd.DataFrame:
+def segmentation_area_multiple(segs: List[TimeseriesMask]) -> pd.DataFrame:
     dfs = []
     for tsm in segs:
-        area = segmentation_area(tsm.mask, **kwargs)
+        area = segmentation_area(tsm.mask, unit="meter", resolution=tsm.resolution)
         df = pd.DataFrame(
             data={
                 "date": tsm.dates,
@@ -44,7 +44,7 @@ def segmentation_area(
 
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
-        total_area *= resolution
+        total_area *= resolution ** 2
 
     return total_area
 
