@@ -1,12 +1,17 @@
 """Water masks derived from Pekel et al. paper."""
 
+
 import numpy as np
 
-from .utils import PekelBands
+from .utils import Bands, SarBands
 
 
-def combine_masks(b: PekelBands, cloud_mask=True) -> np.ndarray:
+def combine_masks(b: Bands, cloud_mask=True) -> np.ndarray:
     """Return the overall mask."""
+
+    if isinstance(b, SarBands):
+        return sar_water(b)
+
     mask = (
         (water1(b) + water2(b) ^ water3(b))
         * (confusion1a(b) + confusion1b(b))
@@ -20,6 +25,10 @@ def combine_masks(b: PekelBands, cloud_mask=True) -> np.ndarray:
         mask[iscloud(b)] = -2
 
     return mask
+
+
+def sar_water(b: SarBands):
+    return np.where((b.vv > 15) & (b.vh > 15), 1, 0)
 
 
 def invalid(b):
