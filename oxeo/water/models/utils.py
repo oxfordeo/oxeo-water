@@ -118,9 +118,9 @@ def merge_masks_one_constellation(
     max_x = max(x)
     max_y = max(y)
 
-    patch_size = get_patch_size(patch_paths)
-    tile_size = get_tile_size([pp.tile for pp in patch_paths])
-    resolution = int(patch_paths / tile_size)
+    tile_size = get_tile_size([pp.tile for pp in patch_paths])  # in metres
+    patch_size = get_patch_size(patch_paths)  # in pixels
+    resolution = int(tile_size / patch_size)
 
     common_dates = get_dates_in_common(patch_paths, constellation)
     nearest_start_date = nearest(common_dates, start_date)
@@ -135,7 +135,8 @@ def merge_masks_one_constellation(
             end_date_index - start_date_index,
             (max_y + 1) * patch_size,
             (max_x + 1) * patch_size,
-        )
+        ),
+        dtype=np.uint8,
     )
 
     for i, pp in enumerate(patch_paths):
@@ -168,7 +169,6 @@ def merge_masks_one_constellation(
         # So I bring all the dates until the last one and then a filter them.
         arr = arr[: date_indices_vals[-1] + 1].astype(np.uint8)
         full_mask[:, start_y:end_y, start_x:end_x] = arr[date_indices_vals, :]
-        full_mask = full_mask.astype(np.uint8)
 
     # Return the mask and tha common dates in the given range.
     return TimeseriesMask(
