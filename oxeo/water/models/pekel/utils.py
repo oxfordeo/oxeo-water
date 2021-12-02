@@ -2,6 +2,7 @@ from typing import List, Optional
 
 import numpy as np
 from attr import define
+from pystac.extensions.eo import Band
 from rasterio.fill import fillnodata
 from satextractor.models.constellation_info import BAND_INFO
 from skimage.color import rgb2hsv
@@ -9,7 +10,18 @@ from skimage.morphology import erosion
 
 
 @define
-class PekelBands:
+class Bands:
+    pass
+
+
+@define
+class SarBands(Bands):
+    vv: np.ndarray
+    vh: np.ndarray
+
+
+@define
+class PekelBands(Bands):
     alpha: np.ndarray
     blue: np.ndarray
     swir1: np.ndarray
@@ -26,15 +38,25 @@ class PekelBands:
 
 
 def get_band_list(constellation: str) -> List[str]:
+    BAND_INFO["sentinel-1"] = {
+        "B1": Band.create(name="B1", common_name="VV"),
+        "B2": Band.create(name="B2", common_name="VH"),
+    }
     return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
 
-def pekel_bands(arr: np.ndarray, constellation: str) -> PekelBands:
+def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:
     """Get all bands needed for Pekel masks."""
 
     assert arr.ndim == 3, "arr must have ndim == 3"
 
     bands = get_band_list(constellation)
+
+    if constellation == "sentinel-1":
+        return SarBands(
+            vv=arr[bands.index("VV")],
+            vh=arr[bands.index("VH")],
+        )
 
     ndvi = (arr[bands.index("nir")] - arr[bands.index("red")]) / (
         arr[bands.index("nir")] + arr[bands.index("red")]
