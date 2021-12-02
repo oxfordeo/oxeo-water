@@ -39,8 +39,8 @@ class PekelBands(Bands):
 
 def get_band_list(constellation: str) -> List[str]:
     BAND_INFO["sentinel-1"] = {
-        "B1": Band.create(name="B1", common_name="VV"),
-        "B2": Band.create(name="B2", common_name="VH"),
+        "B1": {"band": Band.create(name="B1", common_name="VV")},
+        "B2": {"band": Band.create(name="B2", common_name="VH")},
     }
     return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
