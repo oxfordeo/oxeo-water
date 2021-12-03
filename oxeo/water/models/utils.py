@@ -9,6 +9,25 @@ from satextractor.models import Tile
 from shapely.geometry import MultiPolygon, Polygon
 
 
+def tile_from_id(id):
+    zone, row, bbox_size_x, xloc, yloc = id.split("_")
+    bbox_size_x, xloc, yloc = int(bbox_size_x), int(xloc), int(yloc)
+    bbox_size_y = bbox_size_x
+    min_x = xloc * bbox_size_x
+    min_y = yloc * bbox_size_y
+    max_x = min_x + bbox_size_x
+    max_y = min_y + bbox_size_y
+    return Tile(
+        zone=zone,
+        row=row,
+        min_x=min_x,
+        min_y=min_y,
+        max_x=max_x,
+        max_y=max_y,
+        epsg="NONE",
+    )
+
+
 @frozen
 class TilePath:
     tile: Tile
@@ -46,7 +65,9 @@ def get_dates_in_common(
 ) -> List[datetime]:
     dates: Set[str] = set()
     for pp in patch_paths:
-        date = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
+        dates_path = f"gs://{pp.path}/timestamps"
+        print(f"Loading {dates_path=}")
+        date = zarr.open(dates_path, "r")[:]
         if len(dates) == 0:
             dates = set(date)
         else:
@@ -63,9 +84,13 @@ def zarr_dates_to_datetime(dates: Set[str]) -> List[datetime]:
 
 
 def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
+    # TODO: Probably unnecessary to load all patches for this,
+    # could just assume they're the same size
     sizes = []
     for patch in patch_paths:
-        z = zarr.open(f"gs://{patch.path}/data", "r")
+        arr_path = f"gs://{patch.path}/data"
+        print(f"Loading {arr_path=}")
+        z = zarr.open(arr_path, "r")
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"
         sizes.append(x)
@@ -109,6 +134,10 @@ def merge_masks_one_constellation(
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
     ]
+    if len(patch_paths) == 0:
+        # TODO rather just log and fail silently?
+        raise ValueError(f"Constellation '{constellation}' not found in waterbody")
+
     xy = [parse_xy(pp.tile) for pp in patch_paths]
     x, y = list(zip(*xy))
     # TODO improve this
@@ -141,7 +170,10 @@ def merge_masks_one_constellation(
 
     for i, pp in enumerate(patch_paths):
         # Get the dates for that patch
-        dates = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
+
+        dates_path = f"gs://{pp.path}/timestamps"
+        print(f"Loading {dates_path=}")
+        dates = zarr.open(dates_path, "r")[:]
         dates = zarr_dates_to_datetime(dates)
 
         # This is tricky. Here I check for the dates that all patches share
@@ -159,7 +191,9 @@ def merge_masks_one_constellation(
         date_indices_vals = list(date_indices.values())
 
         # Once I have the indices I can get the patch and append it to the fullmask
-        arr = zarr.open(f"gs://{pp.path}/mask/{model_name}", "r")
+        arr_path = f"gs://{pp.path}/mask/{model_name}"
+        print(f"Loading {arr_path=}")
+        arr = zarr.open(arr_path, "r")
         start_y = (max_y - xy[i][1]) * patch_size
         end_y = start_y + patch_size
         start_x = xy[i][0] * patch_size
