@@ -7,6 +7,7 @@ from attr import frozen
 from satextractor.models import Tile
 from satools.io import ConstellationData, constellation_dataarray
 from shapely.geometry import MultiPolygon, Polygon
+from zarr.core import ArrayNotFoundError
 
 
 def tile_from_id(id):
@@ -89,10 +90,14 @@ def merge_masks_all_constellations(
     model_name: str,
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
-    mask_list = [
-        merge_masks_one_constellation(waterbody, model_name, constellation)
-        for constellation in constellations
-    ]
+    mask_list = []
+    for constellation in constellations:
+        try:
+            tsm = merge_masks_one_constellation(waterbody, model_name, constellation)
+            mask_list.append(tsm)
+        except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
+            print(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
+            print("Continuing with other constellations")
     return mask_list
 
 
@@ -107,7 +112,6 @@ def merge_masks_one_constellation(
         pp for pp in waterbody.paths if pp.constellation == constellation
     ]
     if len(patch_paths) == 0:
-        # TODO rather just log and fail silently?
         raise ValueError(f"Constellation '{constellation}' not found in waterbody")
 
     tile_size = get_tile_size([pp.tile for pp in patch_paths])  # in metres
