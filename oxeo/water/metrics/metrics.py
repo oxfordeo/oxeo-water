@@ -1,19 +1,45 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
+import dask.array as da
+import geopandas as gpd
 import numpy as np
 import pandas as pd
+import rasterio as rio
 import xarray as xr
+from pyproj import CRS
+from satextractor.models import Tile
 from scipy import stats
+from shapely.geometry import MultiPolygon, Polygon
+from skimage.morphology import (
+    closing,
+    label,
+    remove_small_holes,
+    remove_small_objects,
+    square,
+)
 
-from oxeo.water.models.utils import TimeseriesMask
+from oxeo.water.models.utils import TimeseriesMask, WaterBody
 
 UNITS = ["pixel", "meter"]
 
 
-def segmentation_area_multiple(segs: List[TimeseriesMask]) -> pd.DataFrame:
+def segmentation_area_multiple(
+    segs: List[TimeseriesMask],
+    waterbody: WaterBody,
+) -> pd.DataFrame:
+
+    geom = waterbody.geometry
+    tiles = [tp.tile for tp in waterbody.paths]
+
     dfs = []
     for tsm in segs:
-        area = segmentation_area(tsm.data, unit="meter", resolution=tsm.resolution)
+        shape = tsm.data.shape[2:]
+        epsg = tiles[0].epsg
+        osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
+
+        data = mask_cube(tsm.data, osm_raster)
+
+        area = segmentation_area(data, unit="meter", resolution=tsm.resolution)
         df = pd.DataFrame(
             data={
                 "date": tsm.data.revisits.compute().data,
@@ -23,6 +49,28 @@ def segmentation_area_multiple(segs: List[TimeseriesMask]) -> pd.DataFrame:
         )
         dfs.append(df)
     return pd.concat(dfs, axis=0)
+
+
+def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray):
+    lab = arr[i, 0, ...].compute().astype(bool)
+    lab = closing(lab, square(3))
+    lab = remove_small_holes(lab, area_threshold=50, connectivity=2)
+    lab = remove_small_objects(lab, min_size=50, connectivity=2)
+    lab = label(lab, connectivity=2)
+
+    masked = geom_raster * lab
+    keepers = [val for val in np.unique(masked) if val != 0]
+
+    fin = np.isin(lab, keepers)
+    da_arr = da.stack([da.from_array(fin)], axis=0)
+    return da_arr
+
+
+def mask_cube(data: xr.DataArray, osm_raster: np.ndarray) -> xr.DataArray:
+    all_masks = [mask_single(data, i, osm_raster) for i in range(len(data))]
+    block = da.stack(all_masks, axis=0)
+    osm_masked = xr.DataArray(block, dims=["revisits", "bands", "height", "width"])
+    return osm_masked
 
 
 def segmentation_area(
@@ -52,3 +100,37 @@ def segmentation_area(
 
 def pearson(x, y):
     return stats.pearsonr(x, y)[0]
+
+
+def rasterize_geom(
+    geom: Union[Polygon, MultiPolygon],
+    tiles: List[Tile],
+    shape: Tuple(int, int),
+    epsg: int,
+) -> np.ndarray:
+    geom = gpd.GeoSeries(geom, crs=CRS.from_epsg(4326)).to_crs(epsg=epsg).geometry
+    min_x = min(t.min_x for t in tiles)
+    min_y = min(t.min_y for t in tiles)
+    max_x = max(t.max_x for t in tiles)
+    max_y = max(t.max_y for t in tiles)
+    height, width = shape
+
+    affine = rio.transform.from_bounds(
+        west=min_x,
+        south=min_y,
+        east=max_x,
+        north=max_y,
+        width=width,
+        height=height,
+    )
+
+    geom_raster = rio.features.rasterize(
+        geom,
+        out_shape=shape,
+        fill=0,
+        default_value=1,
+        all_touched=True,
+        transform=affine,
+    )
+
+    return geom_raster
