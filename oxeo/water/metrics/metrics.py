@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from scipy import stats
 
 from oxeo.water.models.utils import TimeseriesMask
@@ -12,11 +13,11 @@ UNITS = ["pixel", "meter"]
 def segmentation_area_multiple(segs: List[TimeseriesMask]) -> pd.DataFrame:
     dfs = []
     for tsm in segs:
-        area = segmentation_area(tsm.mask, unit="meter", resolution=tsm.resolution)
+        area = segmentation_area(tsm.data, unit="meter", resolution=tsm.resolution)
         df = pd.DataFrame(
             data={
-                "date": tsm.dates,
-                "area": area,
+                "date": tsm.data.revisits.compute().data,
+                "area": area.compute().data,
                 "constellation": tsm.constellation,
             }
         )
@@ -25,10 +26,10 @@ def segmentation_area_multiple(segs: List[TimeseriesMask]) -> pd.DataFrame:
 
 
 def segmentation_area(
-    seg: np.ndarray,
+    seg: Union[np.ndarray, xr.DataArray],
     unit: str = "pixel",
     resolution: Optional[int] = 1,
-) -> np.ndarray:
+) -> Union[np.ndarray, xr.DataArray]:
     """Get the total area of a segmentation (Nx..xHxW)
 
     Args:
