@@ -1,7 +1,6 @@
-from attr import define, frozen
+from attr import define
 
 
-@frozen
 class Predictor:
     def predict(self):
         raise NotImplementedError
