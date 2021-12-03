@@ -144,7 +144,7 @@ def merge_masks_one_constellation(
         dates = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
         dates = zarr_dates_to_datetime(dates)
 
-        # This is tricky. Here I check for the dates that all patches share
+        # This is tricky. Here I check for the dates that all patches share.
         # I get the indices of those dates for each of the patches. So I can
         # Extract the correct patches at the end.
         date_indices = {d: index for index, d in enumerate(dates) if d in common_dates}
