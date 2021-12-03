@@ -4,9 +4,9 @@ import dask.array as da
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import rasterio as rio
 import xarray as xr
 from pyproj import CRS
+from rasterio import features, transform
 from satextractor.models import Tile
 from scipy import stats
 from shapely.geometry import MultiPolygon, Polygon
@@ -133,7 +133,7 @@ def rasterize_geom(
     max_y = max(t.max_y for t in tiles)
     height, width = shape
 
-    affine = rio.transform.from_bounds(
+    affine = transform.from_bounds(
         west=min_x,
         south=min_y,
         east=max_x,
@@ -142,7 +142,7 @@ def rasterize_geom(
         height=height,
     )
 
-    geom_raster = rio.features.rasterize(
+    geom_raster = features.rasterize(
         geom,
         out_shape=shape,
         fill=0,
