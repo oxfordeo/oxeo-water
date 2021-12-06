@@ -28,7 +28,6 @@ class PekelPredictor(Predictor):
         arr = arr[revisit]
         if compute:
             arr = arr.compute()
-        arr = arr.astype(float)
 
         p_bands = utils.pekel_bands(arr, constellation)
         c_masks = masks.combine_masks(p_bands, False)

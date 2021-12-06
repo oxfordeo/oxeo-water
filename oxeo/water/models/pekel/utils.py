@@ -3,10 +3,8 @@ from typing import List, Optional
 import numpy as np
 from attr import define
 from pystac.extensions.eo import Band
-from rasterio.fill import fillnodata
 from satextractor.models.constellation_info import BAND_INFO
 from skimage.color import rgb2hsv
-from skimage.morphology import erosion
 
 
 @define
@@ -53,41 +51,31 @@ def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:
     bands = get_band_list(constellation)
 
     if constellation == "sentinel-1":
-        return SarBands(
-            vv=2 ** 16 - arr[bands.index("VV")],
-            vh=2 ** 16 - arr[bands.index("VH")],
-        )
+        vv = 2 ** 16 - arr[bands.index("VV")]
+        vh = 2 ** 16 - arr[bands.index("VH")]
+        return SarBands(vv=vv, vh=vh)
 
-    ndvi = (arr[bands.index("nir")] - arr[bands.index("red")]) / (
-        arr[bands.index("nir")] + arr[bands.index("red")]
-    )
+    arr = np.interp(arr, (0, 10000), (0, 1))
+
     alpha = np.ones(arr.shape[1:])
     cloud_mask = np.zeros(arr.shape[1:])
 
-    # Scale sat-extractor bands to 0-1
-    for i in range(6):
-        a = np.clip(arr[i, ...], 0, 10000)
-        arr[i, ...] = np.interp(a, (0, 10000), (0, 1))
+    nir = arr[bands.index("nir")]
+    red = arr[bands.index("red")]
+    green = arr[bands.index("green")]
+    blue = arr[bands.index("blue")]
+    swir1 = arr[bands.index("swir1")]
+    swir2 = arr[bands.index("swir2")]
 
-    # Don't fill_nodata, as we don't have a real alpha band!
-    # arr = fill_nodata_single(arr, alpha, erode=True)
-
-    hsv = rgb2hsv(
-        arr[
-            [bands.index("swir2"), bands.index("nir"), bands.index("red")], ...
-        ].transpose(1, 2, 0)
-    )
-    hsv2 = rgb2hsv(
-        arr[
-            [bands.index("nir"), bands.index("green"), bands.index("blue")], ...
-        ].transpose(1, 2, 0)
-    )
+    ndvi = (nir - red) / (nir + red)
+    hsv = rgb2hsv(np.stack((swir2, nir, red), axis=-1))
+    hsv2 = rgb2hsv(np.stack((nir, green, blue), axis=-1))
 
     b = PekelBands(
         alpha=alpha,
-        blue=arr[bands.index("blue"), ...],
-        swir1=arr[bands.index("swir1"), ...],
-        swir2=arr[bands.index("swir2"), ...],
+        blue=blue,
+        swir1=swir1,
+        swir2=swir2,
         hue=hsv[..., 0] * 360,
         sat=hsv[..., 1],
         val=hsv[..., 2],
@@ -100,23 +88,3 @@ def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:
     )
 
     return b
-
-
-def fill_nodata_single(arr, alpha, erode=False):
-    """Fillnodata on all bands."""
-
-    orig_dtype = arr.dtype
-    frame = arr.copy().astype(np.float32)
-    sel = np.where(alpha == 0)
-    frame[sel] = -1
-
-    for b in range(frame.shape[0]):
-        band = frame[b, ...].copy()
-        mask = (band != -1).astype(np.int8)
-
-        if erode:
-            # Do an erosion to cover artifacts on the edge of nodata sections
-            mask = erosion(mask, selem=np.ones((3, 3)))
-        band = fillnodata(band, mask)
-        frame[b, ...] = band.copy()
-    return frame.astype(orig_dtype)
