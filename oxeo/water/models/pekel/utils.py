@@ -54,8 +54,8 @@ def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:
 
     if constellation == "sentinel-1":
         return SarBands(
-            vv=arr[bands.index("VV")],
-            vh=arr[bands.index("VH")],
+            vv=2 ** 16 - arr[bands.index("VV")],
+            vh=2 ** 16 - arr[bands.index("VH")],
         )
 
     ndvi = (arr[bands.index("nir")] - arr[bands.index("red")]) / (
