@@ -3,7 +3,7 @@ from typing import List, Union
 
 import xarray as xr
 import zarr
-from attr import frozen
+from attr import define
 from satextractor.models import Tile
 from satools.io import ConstellationData, constellation_dataarray
 from shapely.geometry import MultiPolygon, Polygon
@@ -29,7 +29,7 @@ def tile_from_id(id):
     )
 
 
-@frozen
+@define
 class TilePath:
     tile: Tile
     constellation: str
@@ -41,7 +41,7 @@ class TilePath:
         return f"{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
 
 
-@frozen
+@define
 class WaterBody:
     area_id: int
     name: str
@@ -49,7 +49,7 @@ class WaterBody:
     paths: List[TilePath]
 
 
-@frozen
+@define
 class TimeseriesMask:
     data: xr.DataArray  # TxBxHxW
     constellation: str

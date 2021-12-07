@@ -1,6 +1,6 @@
 from typing import Any
 
-from attr import frozen
+from attr import define
 from joblib import Parallel, delayed
 from satextractor.utils import tqdm_joblib
 from tqdm import tqdm
@@ -9,7 +9,7 @@ from oxeo.water.models import Predictor
 from oxeo.water.models.pekel import masks, utils
 
 
-@frozen
+@define
 class PekelPredictor(Predictor):
     def predict_single_revisit(
         self,
