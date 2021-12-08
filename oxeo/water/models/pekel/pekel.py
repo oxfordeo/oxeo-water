@@ -1,6 +1,6 @@
 from typing import Any
 
-from attr import frozen
+from attr import define
 from joblib import Parallel, delayed
 from satextractor.utils import tqdm_joblib
 from tqdm import tqdm
@@ -9,7 +9,7 @@ from oxeo.water.models import Predictor
 from oxeo.water.models.pekel import masks, utils
 
 
-@frozen
+@define
 class PekelPredictor(Predictor):
     def predict_single_revisit(
         self,
@@ -28,7 +28,6 @@ class PekelPredictor(Predictor):
         arr = arr[revisit]
         if compute:
             arr = arr.compute()
-        arr = arr.astype(float)
 
         p_bands = utils.pekel_bands(arr, constellation)
         c_masks = masks.combine_masks(p_bands, False)

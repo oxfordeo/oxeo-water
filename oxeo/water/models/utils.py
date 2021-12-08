@@ -1,15 +1,35 @@
-import itertools
 from datetime import datetime
-from typing import List, Set, Tuple, Union
+from typing import List, Union
 
-import numpy as np
+import xarray as xr
 import zarr
-from attr import frozen
+from attr import define
 from satextractor.models import Tile
+from satools.io import ConstellationData, constellation_dataarray
 from shapely.geometry import MultiPolygon, Polygon
+from zarr.core import ArrayNotFoundError
 
 
-@frozen
+def tile_from_id(id):
+    zone, row, bbox_size_x, xloc, yloc = id.split("_")
+    bbox_size_x, xloc, yloc = int(bbox_size_x), int(xloc), int(yloc)
+    bbox_size_y = bbox_size_x
+    min_x = xloc * bbox_size_x
+    min_y = yloc * bbox_size_y
+    max_x = min_x + bbox_size_x
+    max_y = min_y + bbox_size_y
+    return Tile(
+        zone=zone,
+        row=row,
+        min_x=min_x,
+        min_y=min_y,
+        max_x=max_x,
+        max_y=max_y,
+        epsg="NONE",
+    )
+
+
+@define
 class TilePath:
     tile: Tile
     constellation: str
@@ -21,7 +41,7 @@ class TilePath:
         return f"{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
 
 
-@frozen
+@define
 class WaterBody:
     area_id: int
     name: str
@@ -29,43 +49,21 @@ class WaterBody:
     paths: List[TilePath]
 
 
-@frozen
+@define
 class TimeseriesMask:
-    mask: np.ndarray  # TxHxW
-    dates: List[datetime]
+    data: xr.DataArray  # TxBxHxW
     constellation: str
     resolution: int
 
 
-def parse_xy(tile: Tile) -> Tuple[int, int]:
-    return (tile.xloc, tile.yloc)
-
-
-def get_dates_in_common(
-    patch_paths: List[TilePath], constellation: str
-) -> List[datetime]:
-    dates: Set[str] = set()
-    for pp in patch_paths:
-        date = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
-        if len(dates) == 0:
-            dates = set(date)
-        else:
-            dates = dates.intersection(date)
-    return zarr_dates_to_datetime(dates)
-
-
-def nearest(items: List[datetime], pivot: datetime):
-    return min(items, key=lambda x: abs(x - pivot))
-
-
-def zarr_dates_to_datetime(dates: Set[str]) -> List[datetime]:
-    return [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
-
-
 def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
+    # TODO: Probably unnecessary to load all patches for this,
+    # could just assume they're the same size
     sizes = []
     for patch in patch_paths:
-        z = zarr.open(f"gs://{patch.path}/data", "r")
+        arr_path = f"gs://{patch.path}/data"
+        print(f"Loading to check size {arr_path=}")
+        z = zarr.open(arr_path, "r")
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"
         sizes.append(x)
@@ -92,10 +90,14 @@ def merge_masks_all_constellations(
     model_name: str,
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
-    mask_list = [
-        merge_masks_one_constellation(waterbody, model_name, constellation)
-        for constellation in constellations
-    ]
+    mask_list = []
+    for constellation in constellations:
+        try:
+            tsm = merge_masks_one_constellation(waterbody, model_name, constellation)
+            mask_list.append(tsm)
+        except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
+            print(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
+            print("Continuing with other constellations")
     return mask_list
 
 
@@ -109,71 +111,28 @@ def merge_masks_one_constellation(
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
     ]
-    xy = [parse_xy(pp.tile) for pp in patch_paths]
-    x, y = list(zip(*xy))
-    # TODO improve this
-    # Hack to deal with changed tile naming system
-    xy = [(p[0] - min(x), p[1] - min(y)) for p in xy]
-    x, y = list(zip(*xy))
-    max_x = max(x)
-    max_y = max(y)
+    if len(patch_paths) == 0:
+        raise ValueError(f"Constellation '{constellation}' not found in waterbody")
 
-    patch_size = get_patch_size(patch_paths)
-    tile_size = get_tile_size([pp.tile for pp in patch_paths])
-    resolution = int(patch_paths / tile_size)
+    tile_size = get_tile_size([pp.tile for pp in patch_paths])  # in metres
+    patch_size = get_patch_size(patch_paths)  # in pixels
+    resolution = int(tile_size / patch_size)
 
-    common_dates = get_dates_in_common(patch_paths, constellation)
-    nearest_start_date = nearest(common_dates, start_date)
-    nearest_end_date = nearest(common_dates, end_date)
-
-    start_date_index = common_dates.index(nearest_start_date)
-    end_date_index = common_dates.index(nearest_end_date)
-
-    # Create the fullmask array to contain the patches
-    full_mask = np.zeros(
-        (
-            end_date_index - start_date_index,
-            (max_y + 1) * patch_size,
-            (max_x + 1) * patch_size,
-        )
+    tile_ids = [
+        tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
+    ]
+    paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
+    c_data = ConstellationData(
+        "sentinel-2",
+        bands=["mask"],
+        paths=paths,
+        height=patch_size,
+        width=patch_size,
     )
+    data_arr = constellation_dataarray(c_data, data_path="mask/pekel")
 
-    for i, pp in enumerate(patch_paths):
-        # Get the dates for that patch
-        dates = zarr.open(f"gs://{pp.path}/timestamps", "r")[:]
-        dates = zarr_dates_to_datetime(dates)
-
-        # This is tricky. Here I check for the dates that all patches share.
-        # I get the indices of those dates for each of the patches. So I can
-        # Extract the correct patches at the end.
-        date_indices = {d: index for index, d in enumerate(dates) if d in common_dates}
-
-        keys = list(date_indices.keys())
-        start_date_index = keys.index(nearest_start_date)
-        end_date_index = keys.index(nearest_end_date)
-
-        date_indices = dict(
-            itertools.islice(date_indices.items(), start_date_index, end_date_index)
-        )
-        date_indices_vals = list(date_indices.values())
-
-        # Once I have the indices I can get the patch and append it to the fullmask
-        arr = zarr.open(f"gs://{pp.path}/mask/{model_name}", "r")
-        start_y = (max_y - xy[i][1]) * patch_size
-        end_y = start_y + patch_size
-        start_x = xy[i][0] * patch_size
-        end_x = start_x + patch_size
-
-        # I need to do this because zarr doesn't support indexing like numpy
-        # So I bring all the dates until the last one and then a filter them.
-        arr = arr[: date_indices_vals[-1] + 1].astype(np.uint8)
-        full_mask[:, start_y:end_y, start_x:end_x] = arr[date_indices_vals, :]
-        full_mask = full_mask.astype(np.uint8)
-
-    # Return the mask and tha common dates in the given range.
     return TimeseriesMask(
-        mask=full_mask,
-        dates=list(date_indices.keys()),
+        data=data_arr,
         constellation=constellation,
         resolution=resolution,
     )
