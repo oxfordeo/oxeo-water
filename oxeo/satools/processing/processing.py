@@ -26,7 +26,7 @@ def to_toa_reflectance(arr: xr.DataArray, band_toa_values: List[BandTOAValues]):
     return arr
 
 
-def toa_brightness_temp(arr: xr.DataArray, band_toa_values: List[BandTOAValues]):
+def to_toa_brightness_temp(arr: xr.DataArray, band_toa_values: List[BandTOAValues]):
     arr = arr.astype(float)
 
     for b_toa in band_toa_values:
