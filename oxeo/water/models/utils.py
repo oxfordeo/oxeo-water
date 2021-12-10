@@ -123,7 +123,7 @@ def merge_masks_one_constellation(
     ]
     paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
     c_data = ConstellationData(
-        "sentinel-2",
+        constellation,
         bands=["mask"],
         paths=paths,
         height=patch_size,
