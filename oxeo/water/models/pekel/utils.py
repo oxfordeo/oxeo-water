@@ -55,7 +55,8 @@ def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:
         vh = 2 ** 16 - arr[bands.index("VH")]
         return SarBands(vv=vv, vh=vh)
 
-    arr = np.interp(arr, (0, 10000), (0, 1))
+    if "sentinel" in constellation:
+        arr = np.interp(arr, (0, 10000), (0, 1))
 
     alpha = np.ones(arr.shape[1:])
     cloud_mask = np.zeros(arr.shape[1:])
