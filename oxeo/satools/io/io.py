@@ -97,11 +97,13 @@ def constellations_dataset(
     constellation_data_arrs = []
     constellation_timestamps = []
     constellation_bands = []
+    constellation_attrs = []
     for c_data in constellations:
         data_arr = constellation_dataarray(c_data, data_path, fs_mapper)
         constellation_data_arrs.append(data_arr)
         constellation_timestamps.append(data_arr.coords["revisits"].data)
         constellation_bands.append(data_arr.coords["bands"].data)
+        constellation_attrs.extend(c_data.paths)
 
     all_timestamps = reduce(np.union1d, constellation_timestamps)
     all_bands = reduce(np.union1d, constellation_bands)
@@ -146,7 +148,11 @@ def constellations_dataset(
         )
         for i in range(len(constellations))
     }
-    ds = xr.Dataset(ds, coords={"revisits": all_timestamps, "bands": sorted(all_bands)})
+    ds = xr.Dataset(
+        ds,
+        coords={"revisits": all_timestamps, "bands": sorted(all_bands)},
+        attrs={"patch_files": constellation_attrs},
+    )
     return ds
 
 
