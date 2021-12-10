@@ -19,7 +19,6 @@ class PekelPredictor(Predictor):
         arr: Any,
         revisit: int,
         constellation="sentinel-2",
-        compute=False,
     ):
         """Return mask for a BxHxW array
         Args:
@@ -31,12 +30,12 @@ class PekelPredictor(Predictor):
         fs = gcsfs.GCSFileSystem()
 
         if "landsat" in constellation:
-            toa_arr = to_toa(
-                arr[constellation][revisit], get_mtl_dict(fs, arr, revisit)
-            )
+            arr = to_toa(arr[constellation][revisit], get_mtl_dict(fs, arr, revisit))
+        else:
+            arr = arr[constellation][revisit]
 
         p_bands = utils.pekel_bands(
-            toa_arr.sel({"bands": list(BAND_INFO[constellation].keys())}).values,
+            arr.sel({"bands": list(BAND_INFO[constellation].keys())}).values,
             constellation,
         )
         c_masks = masks.combine_masks(p_bands, False)
