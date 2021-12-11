@@ -5,9 +5,10 @@ import xarray as xr
 import zarr
 from attr import define
 from satextractor.models import Tile
-from satools.io import ConstellationData, constellation_dataarray
 from shapely.geometry import MultiPolygon, Polygon
 from zarr.core import ArrayNotFoundError
+
+from oxeo.satools.io import ConstellationData, constellation_dataarray
 
 
 def tile_from_id(id):

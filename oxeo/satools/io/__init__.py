@@ -1,1 +1,6 @@
-from .io import ConstellationData, create_index_map, load_virtual_datasets  # noqa
+from .io import (  # noqa
+    ConstellationData,
+    constellation_dataarray,
+    create_index_map,
+    load_virtual_datasets,
+)

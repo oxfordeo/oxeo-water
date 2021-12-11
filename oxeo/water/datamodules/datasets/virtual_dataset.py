@@ -2,8 +2,9 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import gcsfs
 from fsspec import asyn
-from satools.io import ConstellationData, load_virtual_datasets
 from torch.utils.data import Dataset
+
+from oxeo.satools.io import ConstellationData, load_virtual_datasets
 
 
 class VirtualDataset(Dataset):

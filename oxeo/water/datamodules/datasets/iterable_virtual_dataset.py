@@ -7,8 +7,9 @@ import gcsfs
 import torch
 from fsspec import asyn
 from loguru import logger
-from satools.io import ConstellationData, load_virtual_datasets
 from torch.utils.data import IterableDataset
+
+from oxeo.satools.io import ConstellationData, load_virtual_datasets
 
 
 class VirtualDataset(IterableDataset):

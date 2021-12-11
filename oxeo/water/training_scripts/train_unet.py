@@ -8,9 +8,9 @@ from loguru import logger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from satextractor.models import constellation_info
-from satools.io import ConstellationData, create_index_map
 from torchvision.transforms import Compose
 
+from oxeo.satools.io import ConstellationData, create_index_map
 from oxeo.water.callbacks.wandb_callbacks import LogImagePredictions
 from oxeo.water.datamodules import ConstellationDataModule
 from oxeo.water.datamodules import transforms as oxtransforms
