@@ -123,13 +123,7 @@ def merge_masks_one_constellation(
         tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
     ]
     paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
-    c_data = ConstellationData(
-        constellation,
-        bands=["mask"],
-        paths=paths,
-        height=patch_size,
-        width=patch_size,
-    )
+    c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
     data_arr = constellation_dataarray(c_data, data_path="mask/pekel")
 
     return TimeseriesMask(
