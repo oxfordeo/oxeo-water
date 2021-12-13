@@ -29,7 +29,7 @@ class PekelPredictor(Predictor):
         fs = arr.store.fs
 
         if "landsat" in constellation:
-            mtl_path = "/".join(arr.store.dir_path().split("/")[:-2] + ["metadata"])
+            mtl_path = "/".join(arr.store.root.split("/")[:-1] + ["metadata"])
             mtl_dict = get_mtl_dict(fs, mtl_path, revisit)
             arr = to_toa(arr[revisit], mtl_dict, constellation)
         else:
