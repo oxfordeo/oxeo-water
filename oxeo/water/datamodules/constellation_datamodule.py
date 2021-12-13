@@ -2,8 +2,9 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
 from pytorch_lightning import LightningDataModule
-from satools.io import ConstellationData
 from torch.utils.data import DataLoader
+
+from oxeo.satools.io import ConstellationData
 
 from .datasets.virtual_dataset import VirtualDataset
 

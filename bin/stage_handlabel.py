@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 from google.cloud import storage
 from satextractor.models import constellation_info
-from satools.io import ConstellationData, create_index_map
 from torchvision.transforms import Compose
 
+from oxeo.satools.io import ConstellationData, create_index_map
 from oxeo.water.datamodules import ConstellationDataModule
 from oxeo.water.datamodules import transforms as oxtransforms
 

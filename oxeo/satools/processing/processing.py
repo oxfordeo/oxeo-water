@@ -1,45 +1,7 @@
-import contextlib
-
-import attr
-import joblib
 import numpy as np
 import xarray as xr
-from joblib import Parallel, delayed
-from tqdm import tqdm
 
 from .mtl_parser import parsemeta
-
-
-@contextlib.contextmanager
-def tqdm_joblib(tqdm_object):
-    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
-
-    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-
-        def __call__(self, *args, **kwargs):
-            tqdm_object.update(n=self.batch_size)
-            return super().__call__(*args, **kwargs)
-
-    old_batch_callback = joblib.parallel.BatchCompletionCallBack
-    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
-    try:
-        yield tqdm_object
-    finally:
-        joblib.parallel.BatchCompletionCallBack = old_batch_callback
-        tqdm_object.close()
-
-
-@attr.s
-class BandTOAValues:
-    band = attr.ib()
-    radiance_mult = attr.ib(default=None)
-    radiance_add = attr.ib(default=None)
-    reflectance_mult = attr.ib(default=None)
-    reflectance_add = attr.ib(default=None)
-    k1_constant = attr.ib(default=None)
-    k2_constant = attr.ib(default=None)
 
 
 def to_toa_radiance(arr: xr.DataArray, mtl_dict: dict):
@@ -121,20 +83,3 @@ def get_mtl_dict(fs, ds, position):
     mtl_path = f"{revist_ds.attrs['patch_files'][0]}/{data_var}/metadata"
     f = fs.open([path for path in fs.ls(mtl_path) if str_date in path][0])
     return parsemeta(f.read().decode("utf-8"))
-
-
-def dataset_to_toa(fs, ds, constellation, n_jobs=-1, verbose=0):
-    shape = tuple(ds.dims.values())
-    with tqdm_joblib(
-        tqdm(
-            desc="parallel predicting masks on revistis.",
-            total=shape[0],
-        ),
-    ):
-        arrs = Parallel(n_jobs=n_jobs, verbose=verbose, prefer="threads")(
-            [
-                delayed(to_toa)(ds[constellation], get_mtl_dict(fs, ds, revisit))
-                for revisit in range(shape[0])
-            ],
-        )
-    return arrs

@@ -5,9 +5,10 @@ import xarray as xr
 import zarr
 from attr import define
 from satextractor.models import Tile
-from satools.io import ConstellationData, constellation_dataarray
 from shapely.geometry import MultiPolygon, Polygon
 from zarr.core import ArrayNotFoundError
+
+from oxeo.satools.io import ConstellationData, constellation_dataarray
 
 
 def tile_from_id(id):
@@ -122,13 +123,7 @@ def merge_masks_one_constellation(
         tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
     ]
     paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
-    c_data = ConstellationData(
-        "sentinel-2",
-        bands=["mask"],
-        paths=paths,
-        height=patch_size,
-        width=patch_size,
-    )
+    c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
     data_arr = constellation_dataarray(c_data, data_path="mask/pekel")
 
     return TimeseriesMask(
