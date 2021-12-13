@@ -1,9 +1,8 @@
 from typing import Any
 
-import gcsfs
+import zarr
 from attr import define
 from joblib import Parallel, delayed
-from satextractor.models.constellation_info import BAND_INFO
 from satextractor.utils import tqdm_joblib
 from tqdm import tqdm
 
@@ -16,36 +15,37 @@ from oxeo.water.models.pekel import masks, utils
 class PekelPredictor(Predictor):
     def predict_single_revisit(
         self,
-        arr: Any,
+        arr: zarr.core.Array,
         revisit: int,
         constellation="sentinel-2",
     ):
         """Return mask for a BxHxW array
         Args:
-            arr (np.ndarray): the array to make predictions in
+            arr (zarr.core.Array): the zarr array to make predictions in
 
         Returns:
             [type]: HxW mask
         """
-        fs = gcsfs.GCSFileSystem()
+        fs = arr.store.fs
 
         if "landsat" in constellation:
-            arr = to_toa(arr[constellation][revisit], get_mtl_dict(fs, arr, revisit))
+            mtl_path = "/".join(arr.store.dir_path().split("/")[:-2] + ["metadata"])
+            mtl_dict = get_mtl_dict(fs, mtl_path, revisit)
+            arr = to_toa(arr[revisit], mtl_dict, constellation)
         else:
-            arr = arr[constellation][revisit]
+            arr = arr[revisit]
 
         p_bands = utils.pekel_bands(
-            arr.sel({"bands": list(BAND_INFO[constellation].keys())}).values,
+            arr,
             constellation,
         )
-        c_masks = masks.combine_masks(p_bands, False)
+        c_masks = masks.combine_masks(p_bands, cloud_mask=False)
         return c_masks
 
     def predict(
         self,
         arr: Any,
         constellation="sentinel-2",
-        compute=False,
         n_jobs=-1,
         verbose=0,
     ):
@@ -56,19 +56,16 @@ class PekelPredictor(Predictor):
         Returns:
             [type]: TxHxW masks
         """
-        shape = tuple(arr.dims.values())
         with tqdm_joblib(
             tqdm(
                 desc="parallel predicting masks on revistis.",
-                total=shape[0],
+                total=arr.shape[0],
             ),
         ):
             masks = Parallel(n_jobs=n_jobs, verbose=verbose)(
                 [
-                    delayed(self.predict_single_revisit)(
-                        arr, revisit, constellation, compute
-                    )
-                    for revisit in range(shape[0])
+                    delayed(self.predict_single_revisit)(arr, revisit, constellation)
+                    for revisit in range(arr.shape[0])
                 ],
             )
 
