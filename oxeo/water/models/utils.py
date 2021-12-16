@@ -1,6 +1,8 @@
+import functools
 from datetime import datetime
-from typing import List, Union
+from typing import List, Tuple, Union
 
+import numpy as np
 import xarray as xr
 import zarr
 from attr import define
@@ -30,7 +32,7 @@ def tile_from_id(id):
     )
 
 
-@define
+@define(frozen=True)
 class TilePath:
     tile: Tile
     constellation: str
@@ -39,7 +41,19 @@ class TilePath:
 
     @property
     def path(self):
-        return f"{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+        return f"gs://{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+
+    @property
+    def timestamps_path(self):
+        return f"{self.path}/timestamps"
+
+    @property
+    def data_path(self):
+        return f"{self.path}/data"
+
+    @property
+    def mask_path(self):
+        return f"{self.path}/mask"
 
 
 @define
@@ -104,10 +118,7 @@ def merge_masks_all_constellations(
 
 def merge_masks_one_constellation(
     waterbody: WaterBody,
-    model_name: str,
     constellation: str,
-    start_date: datetime = date_earliest,
-    end_date: datetime = date_latest,
 ):
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
@@ -131,3 +142,20 @@ def merge_masks_one_constellation(
         constellation=constellation,
         resolution=resolution,
     )
+
+
+@functools.lru_cache(maxsize=5)
+def load_tile(tile_path: TilePath, masks: Tuple[str, ...] = ()):
+    sample = {}
+    arr = zarr.open_array(tile_path.data_path, mode="r")[:]
+
+    for mask in masks:
+        mask_arr = zarr.open_array(f"{tile_path.mask_path}/{mask}", mode="r")[:]
+        assert (
+            mask_arr.shape[0] == arr.shape[0]
+        ), "Image arr and mask timestamps don't match"
+        mask_arr = mask_arr[:, np.newaxis, ...]
+        sample[mask] = mask_arr
+
+    sample["image"] = arr
+    return sample
