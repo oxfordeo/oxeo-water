@@ -21,9 +21,9 @@ class RandomSampler(Sampler):
         tile_dates = self.dataset.dates
         for _ in range(self.length):
             # Choose a random tile_index
-            tile_index = random.randint(0, dataset_len)
+            tile_index = random.randint(0, dataset_len - 1)
 
-            timestamp_index = random.randint(0, tile_dates[tile_index])
+            timestamp_index = random.randint(0, tile_dates[tile_index] - 1)
 
             # Choose random i and j
             i, j = random.sample(range(self.tile_size - self.chip_size), 2)

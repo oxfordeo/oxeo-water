@@ -144,13 +144,19 @@ def merge_masks_one_constellation(
     )
 
 
-@functools.lru_cache(maxsize=5)
-def load_tile(tile_path: TilePath, masks: Tuple[str, ...] = ()):
+@functools.lru_cache(maxsize=512)
+def load_tile(
+    fs_mapper, tile_path: TilePath, masks: Tuple[str, ...] = (), revisit: int = None
+):
     sample = {}
-    arr = zarr.open_array(tile_path.data_path, mode="r")[:]
+    arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")[revisit].astype(
+        np.int16
+    )
 
     for mask in masks:
-        mask_arr = zarr.open_array(f"{tile_path.mask_path}/{mask}", mode="r")[:]
+        mask_arr = zarr.open_array(
+            fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
+        )[revisit].astype(np.int8)
         assert (
             mask_arr.shape[0] == arr.shape[0]
         ), "Image arr and mask timestamps don't match"
