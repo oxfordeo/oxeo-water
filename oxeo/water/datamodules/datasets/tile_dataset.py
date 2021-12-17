@@ -5,7 +5,10 @@ import zarr
 from fsspec import asyn
 from torch.utils.data import Dataset
 
+from oxeo.satools.io import strdates_to_datetime
 from oxeo.water.models.utils import TilePath, load_tile
+
+from .utils import np_index
 
 
 class TileDataset(Dataset):
@@ -32,12 +35,17 @@ class TileDataset(Dataset):
         self.fs_mapper = None
 
         self.dates = [
-            zarr.open_array(tile_path.timestamps_path).shape[0]
+            strdates_to_datetime(zarr.open_array(tile_path.timestamps_path)[:])
             for tile_path in self.tile_paths
         ]
 
+    def valid_date(self, tile_index: int, timestamp):
+        return timestamp in self.dates[tile_index]
+
     def __getitem__(self, index):
-        tile_index, timestamp_index, i, j, chip_size = index
+        tile_index, timestamp, i, j, chip_size = index
+
+        timestamp_index = np_index(self.dates[tile_index], timestamp)
 
         tile_sample = load_tile(
             self.fs_mapper,

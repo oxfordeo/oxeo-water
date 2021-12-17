@@ -23,12 +23,12 @@ class RandomSampler(Sampler):
             # Choose a random tile_index
             tile_index = random.randint(0, dataset_len - 1)
 
-            timestamp_index = random.randint(0, tile_dates[tile_index] - 1)
+            timestamp = random.choice(tile_dates[tile_index])
 
             # Choose random i and j
             i, j = random.sample(range(self.tile_size - self.chip_size), 2)
 
-            yield tile_index, timestamp_index, i, j, self.chip_size
+            yield tile_index, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
         """Return the number of samples in a single epoch.
@@ -51,11 +51,19 @@ class GridSampler(Sampler):
         """
         dataset_len = len(self.dataset)
         tile_dates = self.dataset.dates
+
+        limit = self.tile_size - self.chip_size
+
         for tile_index in range(dataset_len):
-            for timestamp_index in range(tile_dates[tile_index]):
+            for timestamp in tile_dates[tile_index]:
                 for i in range(0, self.tile_size, self.chip_size):
                     for j in range(0, self.tile_size, self.chip_size):
-                        yield tile_index, timestamp_index, i, j, self.chip_size
+                        if i >= limit:
+                            i = limit
+                        if j >= limit:
+                            j = limit
+
+                        yield tile_index, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
         """Return the number of samples in a single epoch.
@@ -63,4 +71,6 @@ class GridSampler(Sampler):
             length of the epoch
         """
         chips_per_tile = (self.tile_size // self.chip_size) ** 2
-        return len(self.dataset) * chips_per_tile * sum(self.dataset.dates)
+        return (
+            len(self.dataset) * chips_per_tile * sum(len(d) for d in self.dataset.dates)
+        )
