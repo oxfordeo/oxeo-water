@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Tuple, Union
 
 import numpy as np
+import torch
 import xarray as xr
 import zarr
 from attr import define
@@ -147,7 +148,7 @@ def merge_masks_one_constellation(
 @functools.lru_cache(maxsize=512)
 def load_tile(
     fs_mapper, tile_path: TilePath, masks: Tuple[str, ...] = (), revisit: int = None
-):
+) -> torch.Tensor:
     sample = {}
     arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")[revisit].astype(
         np.int16
@@ -161,7 +162,7 @@ def load_tile(
             mask_arr.shape[0] == arr.shape[0]
         ), "Image arr and mask timestamps don't match"
         mask_arr = mask_arr[:, np.newaxis, ...]
-        sample[mask] = mask_arr
+        sample[mask] = torch.as_tensor(mask_arr)
 
-    sample["image"] = arr
+    sample["image"] = torch.as_tensor(arr)
     return sample
