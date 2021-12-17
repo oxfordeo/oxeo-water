@@ -19,6 +19,7 @@ class TileDataset(Dataset):
         tile_paths: List[TilePath],
         transform: Optional[Callable] = None,
         masks: Iterable[str] = (),
+        target_size: int = None,
     ):
         """Pytorch Dataset to load data from tiles paths
 
@@ -33,6 +34,7 @@ class TileDataset(Dataset):
         self.transform = transform
         self.masks = masks
         self.fs_mapper = None
+        self.target_size = target_size
 
         self.dates = [
             strdates_to_datetime(zarr.open_array(tile_path.timestamps_path)[:])
@@ -52,6 +54,7 @@ class TileDataset(Dataset):
             self.tile_paths[tile_index],
             masks=self.masks,
             revisit=timestamp_index,
+            target_size=self.target_size,
         )
 
         chip_sample = {}

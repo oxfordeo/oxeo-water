@@ -50,7 +50,10 @@ class UnionDataset(Dataset):
         return self.collate_fn(samples)
 
     def __len__(self):
-        return len(self.datasets[0].tile_paths)
+        return len(self.datasets[0])
+
+    def valid_date(self, tile_index: int, timestamp):
+        return timestamp in self.dates[tile_index]
 
     def per_worker_init(self) -> None:
         for ds in self.datasets:

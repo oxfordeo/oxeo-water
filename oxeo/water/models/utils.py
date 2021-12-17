@@ -9,6 +9,7 @@ import zarr
 from attr import define
 from satextractor.models import Tile
 from shapely.geometry import MultiPolygon, Polygon
+from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
@@ -147,7 +148,11 @@ def merge_masks_one_constellation(
 
 @functools.lru_cache(maxsize=512)
 def load_tile(
-    fs_mapper, tile_path: TilePath, masks: Tuple[str, ...] = (), revisit: int = None
+    fs_mapper,
+    tile_path: TilePath,
+    masks: Tuple[str, ...] = (),
+    revisit: int = None,
+    target_size: int = None,
 ) -> torch.Tensor:
     sample = {}
     arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")[revisit].astype(
@@ -158,11 +163,19 @@ def load_tile(
         mask_arr = zarr.open_array(
             fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
         )[revisit].astype(np.int8)
-        assert (
-            mask_arr.shape[0] == arr.shape[0]
-        ), "Image arr and mask timestamps don't match"
-        mask_arr = mask_arr[:, np.newaxis, ...]
+        mask_arr = mask_arr[np.newaxis, ...]
         sample[mask] = torch.as_tensor(mask_arr)
 
     sample["image"] = torch.as_tensor(arr)
+
+    if target_size is not None:
+        for key in sample.keys():
+            if key == "image":
+                sample[key] = resize(
+                    sample[key], target_size, InterpolationMode.BILINEAR
+                )
+            else:
+                sample[key] = resize(
+                    sample[key], target_size, InterpolationMode.NEAREST
+                )
     return sample
