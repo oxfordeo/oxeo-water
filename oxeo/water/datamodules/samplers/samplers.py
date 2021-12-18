@@ -17,18 +17,17 @@ class RandomSampler(Sampler):
         Returns:
             (tile_index, i, j) coordinates to index a dataset
         """
-        dataset_len = len(self.dataset)
-        tile_dates = self.dataset.dates
+        tile_dates = self.dataset.tile_dates
         for _ in range(self.length):
             # Choose a random tile_index
-            tile_index = random.randint(0, dataset_len - 1)
+            tile_id = random.choice(list(tile_dates.keys()))
 
-            timestamp = random.choice(tile_dates[tile_index])
+            timestamp = random.choice(tile_dates[tile_id])
 
             # Choose random i and j
-            i, j = random.sample(range(self.tile_size - self.chip_size), 2)
+            i, j = random.choices(range(self.tile_size - self.chip_size + 1), k=2)
 
-            yield tile_index, timestamp, i, j, self.chip_size
+            yield tile_id, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
         """Return the number of samples in a single epoch.
@@ -49,13 +48,11 @@ class GridSampler(Sampler):
         Returns:
             (tile_index, i, j) coordinates to index a dataset
         """
-        dataset_len = len(self.dataset)
-        tile_dates = self.dataset.dates
 
         limit = self.tile_size - self.chip_size
 
-        for tile_index in range(dataset_len):
-            for timestamp in tile_dates[tile_index]:
+        for tile_id in self.dataset.tile_dates.keys():
+            for timestamp in self.dataset.tile_dates[tile_id]:
                 for i in range(0, self.tile_size, self.chip_size):
                     for j in range(0, self.tile_size, self.chip_size):
                         if i >= limit:
@@ -63,7 +60,7 @@ class GridSampler(Sampler):
                         if j >= limit:
                             j = limit
 
-                        yield tile_index, timestamp, i, j, self.chip_size
+                        yield tile_id, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
         """Return the number of samples in a single epoch.
@@ -72,5 +69,7 @@ class GridSampler(Sampler):
         """
         chips_per_tile = (self.tile_size // self.chip_size) ** 2
         return (
-            len(self.dataset) * chips_per_tile * sum(len(d) for d in self.dataset.dates)
+            len(self.dataset)
+            * chips_per_tile
+            * sum(len(d) for d in self.dataset.tile_dates.values())
         )

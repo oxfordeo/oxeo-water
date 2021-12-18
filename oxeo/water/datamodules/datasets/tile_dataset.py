@@ -36,22 +36,30 @@ class TileDataset(Dataset):
         self.fs_mapper = None
         self.target_size = target_size
 
-        self.dates = [
-            strdates_to_datetime(zarr.open_array(tile_path.timestamps_path)[:])
+        self.tile_dates = {
+            tile_path.tile.id: strdates_to_datetime(
+                zarr.open_array(tile_path.timestamps_path)[:]
+            )
             for tile_path in self.tile_paths
-        ]
+        }
 
-    def valid_date(self, tile_index: int, timestamp):
-        return timestamp in self.dates[tile_index]
+        self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
+
+    def valid_date(self, tile_id: str, timestamp):
+        dates = self.tile_dates.get(tile_id)
+        if dates is not None:
+            return timestamp in dates
+        else:
+            return False
 
     def __getitem__(self, index):
-        tile_index, timestamp, i, j, chip_size = index
+        tile_id, timestamp, i, j, chip_size = index
 
-        timestamp_index = np_index(self.dates[tile_index], timestamp)
+        timestamp_index = np_index(self.tile_dates[tile_id], timestamp)
 
         tile_sample = load_tile(
             self.fs_mapper,
-            self.tile_paths[tile_index],
+            self.tile_paths[self.tiles_ids.index(tile_id)],
             masks=self.masks,
             revisit=timestamp_index,
             target_size=self.target_size,
@@ -69,7 +77,7 @@ class TileDataset(Dataset):
         return chip_sample
 
     def __len__(self):
-        return len(self.tile_paths)
+        return len(self.tile_dates)
 
     def per_worker_init(self) -> None:
         """

@@ -26,34 +26,44 @@ class UnionDataset(Dataset):
         """
         super().__init__()
         self.datasets = [dataset1, dataset2]
+
         self.collate_fn = collate_fn
 
         # Merge dataset dates
         self._merge_dataset_dates()
 
     def _merge_dataset_dates(self):
-        ds1_tile_dates = self.datasets[0].dates
-        ds2_tile_dates = self.datasets[1].dates
-        self.dates = []
-        for i in range(len(ds1_tile_dates)):
-            self.dates.append(np.union1d(ds1_tile_dates[i], ds2_tile_dates[i]))
+        ds1_tile_dates = self.datasets[0].tile_dates
+        ds2_tile_dates = self.datasets[1].tile_dates
+
+        self.tile_dates = {}
+        for d in [ds1_tile_dates, ds2_tile_dates]:
+            for key in d:
+                try:
+                    self.tile_dates[key] = np.union1d(self.tile_dates[key], d[key])
+                except KeyError:
+                    self.tile_dates[key] = d[key]
 
     def __getitem__(self, index):
-        tile_index, timestamp, _, _, _ = index
+        tile_id, timestamp, _, _, _ = index
 
         # Not all datasets are guaranteed to have a valid query
         samples = []
         for ds in self.datasets:
-            if ds.valid_date(tile_index, timestamp):
+            if ds.valid_date(tile_id, timestamp):
                 samples.append(ds[index])
 
         return self.collate_fn(samples)
 
     def __len__(self):
-        return len(self.datasets[0])
+        return len(self.tile_dates)
 
-    def valid_date(self, tile_index: int, timestamp):
-        return timestamp in self.dates[tile_index]
+    def valid_date(self, tile_id: str, timestamp):
+        dates = self.tile_dates.get(tile_id)
+        if dates is not None:
+            return timestamp in dates
+        else:
+            return False
 
     def per_worker_init(self) -> None:
         for ds in self.datasets:
