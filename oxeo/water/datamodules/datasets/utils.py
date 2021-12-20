@@ -8,7 +8,7 @@ from torch import Tensor
 def np_index(array, item):
     for idx, val in np.ndenumerate(array):
         if val == item:
-            return idx
+            return idx[0]
 
 
 def merge_samples(samples: Iterable[Dict[Any, Any]]) -> Dict[Any, Any]:

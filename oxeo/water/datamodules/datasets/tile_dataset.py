@@ -20,6 +20,7 @@ class TileDataset(Dataset):
         transform: Optional[Callable] = None,
         masks: Iterable[str] = (),
         target_size: int = None,
+        bands: Iterable[str] = None,
     ):
         """Pytorch Dataset to load data from tiles paths
 
@@ -35,6 +36,7 @@ class TileDataset(Dataset):
         self.masks = masks
         self.fs_mapper = None
         self.target_size = target_size
+        self.bands = tuple(bands)
 
         self.tile_dates = {
             tile_path.tile.id: strdates_to_datetime(
@@ -57,12 +59,15 @@ class TileDataset(Dataset):
 
         timestamp_index = np_index(self.tile_dates[tile_id], timestamp)
 
+        tile_path = self.tile_paths[self.tiles_ids.index(tile_id)]
+
         tile_sample = load_tile(
             self.fs_mapper,
-            self.tile_paths[self.tiles_ids.index(tile_id)],
+            tile_path,
             masks=self.masks,
             revisit=timestamp_index,
             target_size=self.target_size,
+            bands=self.bands,
         )
 
         chip_sample = {}
@@ -70,6 +75,8 @@ class TileDataset(Dataset):
             chip_sample[key] = tile_sample[key][
                 ..., i : i + chip_size, j : j + chip_size
             ]
+
+        chip_sample["constellation"] = tile_path.constellation
 
         if self.transform:
             chip_sample = self.transform(chip_sample)

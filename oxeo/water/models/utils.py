@@ -7,12 +7,22 @@ import torch
 import xarray as xr
 import zarr
 from attr import define
+from pystac.extensions.eo import Band
 from satextractor.models import Tile
+from satextractor.models.constellation_info import BAND_INFO
 from shapely.geometry import MultiPolygon, Polygon
 from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
+
+
+def get_band_list(constellation: str) -> List[str]:
+    BAND_INFO["sentinel-1"] = {
+        "B1": {"band": Band.create(name="B1", common_name="VV")},
+        "B2": {"band": Band.create(name="B2", common_name="VH")},
+    }
+    return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
 
 def tile_from_id(id):
@@ -153,11 +163,17 @@ def load_tile(
     masks: Tuple[str, ...] = (),
     revisit: int = None,
     target_size: int = None,
+    bands: Tuple[str, ...] = None,
 ) -> torch.Tensor:
+    if bands is not None:
+        band_common_names = get_band_list(tile_path.constellation)
+        band_indices = [band_common_names.index(b) for b in bands]
+    else:
+        band_indices = slice(None)
+
     sample = {}
-    arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")[revisit].astype(
-        np.int16
-    )
+    arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")
+    arr = arr.oindex[revisit, band_indices].astype(np.int16)
 
     for mask in masks:
         mask_arr = zarr.open_array(

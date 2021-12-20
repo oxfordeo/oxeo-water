@@ -36,6 +36,7 @@ class Segmentation2D(LightningModule):
             lr: learning (default 0.01)
         """
         super().__init__()
+        self.save_hyperparameters(logger=False)
 
         self.num_classes = num_classes
         self.input_channels = input_channels
@@ -60,8 +61,8 @@ class Segmentation2D(LightningModule):
         return self.net(x)
 
     def training_step(self, batch, batch_nb):
-        img = batch["data"].float()
-        label = batch["label"]  # (B, 1, H, W)
+        img = batch["image"].float()
+        label = batch["pekel"]  # (B, 1, H, W)
 
         pred = self(img)
         loss = self.criterion(pred, label.float())
@@ -71,8 +72,8 @@ class Segmentation2D(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        img = batch["data"].float()
-        label = batch["label"]
+        img = batch["image"].float()
+        label = batch["pekel"]
 
         pred = self(img)
 

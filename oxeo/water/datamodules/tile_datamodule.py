@@ -28,12 +28,13 @@ class TileDataModule(LightningDataModule):
         self,
         train_constellation_tile_ids: Dict[str, List[str]],
         val_constellation_tile_ids: Dict[str, List[str]] = None,
+        bands: List[str] = None,
         tile_size: int = 1000,
         chip_size: int = 256,
         transforms: Optional[Callable] = None,
         total_samples: int = 2000,
         batch_size: int = 32,
-        num_workers: int = 0,
+        num_workers: int = 1,
         pin_memory: bool = False,
     ):
         super().__init__()
@@ -47,6 +48,7 @@ class TileDataModule(LightningDataModule):
             [TilePath(tile_from_id(tile_id), k) for tile_id in v]
             for k, v in val_constellation_tile_ids.items()
         ]
+        self.bands = bands
         self.tile_size = tile_size
         self.chip_size = chip_size
         self.total_samples = total_samples
@@ -62,6 +64,7 @@ class TileDataModule(LightningDataModule):
             transform=self.transforms,
             masks=("pekel",),
             target_size=self.tile_size,
+            bands=self.bands,
         )
         for tile_paths in constellation_tile_paths[1:]:
             ds2 = TileDataset(
@@ -69,16 +72,19 @@ class TileDataModule(LightningDataModule):
                 transform=self.transforms,
                 masks=("pekel",),
                 target_size=self.tile_size,
+                bands=self.bands,
             )
 
             ds = UnionDataset(ds, ds2)
+        return ds
 
     def setup(self, stage=None):
         """This method is called N times (N being the number of GPUS)"""
-
         self.train_dataset = self.create_dataset(self.train_constellation_tile_paths)
-
         self.val_dataset = self.create_dataset(self.val_constellation_tile_paths)
+        if self.num_workers == 0:
+            self.train_dataset.per_worker_init()
+            self.val_dataset.per_worker_init()
 
     def train_dataloader(self):
         sampler = RandomSampler(
