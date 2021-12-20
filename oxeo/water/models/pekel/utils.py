@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 from attr import define
-from pystac.extensions.eo import Band
-from satextractor.models.constellation_info import BAND_INFO
 from skimage.color import rgb2hsv
+
+from oxeo.water.models.utils import get_band_list
 
 
 @define
@@ -33,14 +33,6 @@ class PekelBands(Bands):
     ndvi: np.ndarray
     cloud: np.ndarray
     tirs1: Optional[np.ndarray] = None
-
-
-def get_band_list(constellation: str) -> List[str]:
-    BAND_INFO["sentinel-1"] = {
-        "B1": {"band": Band.create(name="B1", common_name="VV")},
-        "B2": {"band": Band.create(name="B2", common_name="VH")},
-    }
-    return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
 
 def pekel_bands(arr: np.ndarray, constellation: str) -> Bands:

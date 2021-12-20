@@ -1,14 +1,28 @@
+import functools
 from datetime import datetime
-from typing import List, Union
+from typing import List, Tuple, Union
 
+import numpy as np
+import torch
 import xarray as xr
 import zarr
 from attr import define
+from pystac.extensions.eo import Band
 from satextractor.models import Tile
+from satextractor.models.constellation_info import BAND_INFO
 from shapely.geometry import MultiPolygon, Polygon
+from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
+
+
+def get_band_list(constellation: str) -> List[str]:
+    BAND_INFO["sentinel-1"] = {
+        "B1": {"band": Band.create(name="B1", common_name="VV")},
+        "B2": {"band": Band.create(name="B2", common_name="VH")},
+    }
+    return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
 
 def tile_from_id(id):
@@ -30,7 +44,7 @@ def tile_from_id(id):
     )
 
 
-@define
+@define(frozen=True)
 class TilePath:
     tile: Tile
     constellation: str
@@ -39,7 +53,19 @@ class TilePath:
 
     @property
     def path(self):
-        return f"{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+        return f"gs://{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+
+    @property
+    def timestamps_path(self):
+        return f"{self.path}/timestamps"
+
+    @property
+    def data_path(self):
+        return f"{self.path}/data"
+
+    @property
+    def mask_path(self):
+        return f"{self.path}/mask"
 
 
 @define
@@ -104,10 +130,7 @@ def merge_masks_all_constellations(
 
 def merge_masks_one_constellation(
     waterbody: WaterBody,
-    model_name: str,
     constellation: str,
-    start_date: datetime = date_earliest,
-    end_date: datetime = date_latest,
 ):
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
@@ -131,3 +154,44 @@ def merge_masks_one_constellation(
         constellation=constellation,
         resolution=resolution,
     )
+
+
+@functools.lru_cache(maxsize=512)
+def load_tile(
+    fs_mapper,
+    tile_path: TilePath,
+    masks: Tuple[str, ...] = (),
+    revisit: int = None,
+    target_size: int = None,
+    bands: Tuple[str, ...] = None,
+) -> torch.Tensor:
+    if bands is not None:
+        band_common_names = get_band_list(tile_path.constellation)
+        band_indices = [band_common_names.index(b) for b in bands]
+    else:
+        band_indices = slice(None)
+
+    sample = {}
+    arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")
+    arr = arr.oindex[revisit, band_indices].astype(np.int16)
+
+    for mask in masks:
+        mask_arr = zarr.open_array(
+            fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
+        )[revisit].astype(np.int8)
+        mask_arr = mask_arr[np.newaxis, ...]
+        sample[mask] = torch.as_tensor(mask_arr)
+
+    sample["image"] = torch.as_tensor(arr)
+
+    if target_size is not None:
+        for key in sample.keys():
+            if key == "image":
+                sample[key] = resize(
+                    sample[key], target_size, InterpolationMode.BILINEAR
+                )
+            else:
+                sample[key] = resize(
+                    sample[key], target_size, InterpolationMode.NEAREST
+                )
+    return sample
