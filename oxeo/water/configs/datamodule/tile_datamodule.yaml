@@ -11,9 +11,10 @@ val_constellation_tile_ids:
   landsat-7: [43_P_10000_65_137]
   landsat-8: [43_P_10000_65_137]
 bands: [nir, red, green, blue, swir1, swir2]
-tile_size: 1000
+target_size: 1000
 chip_size: 256
-total_samples: 2000
+revisits_per_epoch: 500
+samples_per_revisit: 1000
 batch_size: 32
 num_workers: 4
 pin_memory: False
