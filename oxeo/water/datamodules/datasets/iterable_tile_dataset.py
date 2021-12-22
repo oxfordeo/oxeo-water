@@ -53,6 +53,15 @@ class IterableTileDataset(IterableDataset):
         }
 
     def __iter__(self):
+        """Each worker will use self.revisits_per_epoch // worker_info.num_workers
+        tiles and extract from them, *samples_per_revisits* chips.
+        Each loaded tile will be cached using load_tile function, so subsequent calls will
+        load data from memory.
+        Yield return a random chip.
+
+        Yields:
+            [type]: [description]
+        """
         worker_info = get_worker_info()
         revisits_per_worker = self.revisits_per_epoch // worker_info.num_workers
         tile_dates = self.tile_dates
