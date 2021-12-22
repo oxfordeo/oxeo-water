@@ -1,4 +1,5 @@
 import random
+from itertools import islice
 from typing import Callable, Iterable, List, Optional
 
 import gcsfs
@@ -25,6 +26,7 @@ class IterableTileDataset(IterableDataset):
         bands: Iterable[str] = None,
         revisits_per_epoch: int = None,
         samples_per_revisit: 100 = None,
+        sampler: str = "random",
     ):
         """Pytorch Dataset to load data from tiles paths
 
@@ -44,6 +46,7 @@ class IterableTileDataset(IterableDataset):
         self.bands = tuple(bands)
         self.revisits_per_epoch = revisits_per_epoch
         self.samples_per_revisit = samples_per_revisit
+        self.sampler = sampler
 
         self.tile_dates = {
             tile_path: strdates_to_datetime(
@@ -63,7 +66,6 @@ class IterableTileDataset(IterableDataset):
             [type]: [description]
         """
         worker_info = get_worker_info()
-        revisits_per_worker = self.revisits_per_epoch // worker_info.num_workers
         tile_dates = self.tile_dates
         unpacked_tile_dates = [
             (
@@ -74,22 +76,41 @@ class IterableTileDataset(IterableDataset):
             for v in tile_dates[tile_path]
         ]
 
-        tile_revisits_to_use = random.choices(
-            unpacked_tile_dates, k=revisits_per_worker
-        )
+        if self.sampler == "random":
 
-        indices = []
-        for tile_path, timestamp in tile_revisits_to_use:
-            i_samples = random.choices(
-                range(self.target_size - self.chip_size + 1), k=self.samples_per_revisit
-            )
-            j_samples = random.choices(
-                range(self.target_size - self.chip_size + 1), k=self.samples_per_revisit
-            )
-            for n in range(len(i_samples)):
-                indices.append((tile_path, timestamp, i_samples[n], j_samples[n]))
+            revisits_per_worker = self.revisits_per_epoch // worker_info.num_workers
 
-        random.shuffle(indices)
+            tile_revisits_to_use = random.choices(
+                unpacked_tile_dates, k=revisits_per_worker
+            )
+
+            indices = []
+            for tile_path, timestamp in tile_revisits_to_use:
+                i_samples = random.choices(
+                    range(self.target_size - self.chip_size + 1),
+                    k=self.samples_per_revisit,
+                )
+                j_samples = random.choices(
+                    range(self.target_size - self.chip_size + 1),
+                    k=self.samples_per_revisit,
+                )
+                for n in range(len(i_samples)):
+                    indices.append((tile_path, timestamp, i_samples[n], j_samples[n]))
+            random.shuffle(indices)
+        elif self.sampler == "grid":
+            tile_revisits_to_use = unpacked_tile_dates
+            limit = self.target_size - self.chip_size
+            indices = []
+            for tile_path, timestamp in tile_revisits_to_use:
+                for i in range(0, self.target_size, self.chip_size):
+                    for j in range(0, self.target_size, self.chip_size):
+                        if i >= limit:
+                            i = limit
+                        if j >= limit:
+                            j = limit
+                        indices.append((tile_path, timestamp, i, j))
+            indices = islice(indices, worker_info.id, None, worker_info.num_workers)
+
         for tile_path, timestamp, i, j in indices:
             timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
@@ -112,7 +133,6 @@ class IterableTileDataset(IterableDataset):
 
             if self.transform:
                 chip_sample = self.transform(chip_sample)
-
             yield chip_sample
 
     def per_worker_init(self) -> None:
