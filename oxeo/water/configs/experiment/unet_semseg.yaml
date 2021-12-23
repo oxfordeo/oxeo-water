@@ -22,15 +22,17 @@ seed: 12345
 
 trainer:
   min_epochs: 1
-  max_epochs: 100
-  limit_val_batches: 20
-  limit_train_batches: 20
+  max_epochs: 200
+  limit_val_batches: 40
+  # limit_train_batches: 20
+  precision: 16
   gpus: -1
 
 model:
   num_classes: 3
   input_channels: 6
-  lr: 0.01
+  lr: 0.001
+
 
 datamodule:
   train_constellation_tile_ids:
@@ -46,11 +48,13 @@ datamodule:
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
   chip_size: 250
-  revisits_per_epoch: 50
-  samples_per_revisit: 256
-  batch_size: 32
-  num_workers: 4
-  pin_memory: False
+  revisits_per_epoch: 1000
+  samples_per_revisit: 250
+  batch_size: 64
+  num_workers: 8
+  pin_memory: True
+
+
 
 callbacks:
   log_f1_precision_recall_heatmap: None

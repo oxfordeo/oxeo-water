@@ -306,7 +306,8 @@ class LogImagePredictions(Callback):
                             },
                         )
                         for i, x in enumerate(
-                            val_imgs[: self.num_samples, [3, 2, 1], :, :]
+                            val_imgs[: self.num_samples, [1, 2, 3], :, :]
+
                         )
                     ],
                 },
