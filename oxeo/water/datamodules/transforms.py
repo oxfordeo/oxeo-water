@@ -7,10 +7,24 @@ from torch import Tensor, nn
 
 class MinMaxNormalize(nn.Module):
     @torch.no_grad()  # disable gradients for effiency
-    def forward(self, sample) -> Tensor:
-        sample["image"] = kornia.enhance.normalize_min_max(
-            sample["image"], min_val=0.0, max_val=1.0, eps=1e-06
-        )
+    def forward(self, x) -> Tensor:
+        x = kornia.enhance.normalize_min_max(x, min_val=0.0, max_val=1.0, eps=1e-06)
+        return x
+
+
+class MasksToLabel:
+    """Merge given masks in order given order
+    (mask 1 will be label 1, mask 2 will be label 2, etc)
+    and create *label* key in sample"""
+
+    def __init__(self, keys: List[str]):
+        self.keys = keys
+
+    def __call__(self, sample):
+        label = sample[self.keys[0]]
+        for i, key in enumerate(self.keys[1:]):
+            label[sample[key] == 1] = i + 2
+        sample["label"] = label.squeeze().long()
         return sample
 
 

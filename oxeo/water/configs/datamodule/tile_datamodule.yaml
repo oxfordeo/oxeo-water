@@ -13,8 +13,8 @@ val_constellation_tile_ids:
 bands: [nir, red, green, blue, swir1, swir2]
 target_size: 1000
 chip_size: 256
-revisits_per_epoch: 500
-samples_per_revisit: 1000
+revisits_per_epoch: 250
+samples_per_revisit: 256
 batch_size: 32
 num_workers: 4
 pin_memory: False

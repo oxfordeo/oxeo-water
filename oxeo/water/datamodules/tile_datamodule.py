@@ -1,12 +1,14 @@
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 
 from oxeo.water.datamodules.datasets import IterableTileDataset
 from oxeo.water.models.utils import TilePath, tile_from_id
 
+from .transforms import MasksToLabel
 from .utils import notnone_collate_fn
 
 
@@ -35,14 +37,13 @@ class TileDataModule(LightningDataModule):
         chip_size: int = 256,
         revisits_per_epoch: int = 500,
         samples_per_revisit: int = 10020,
-        transforms: Optional[Callable] = None,
         batch_size: int = 32,
         num_workers: int = 1,
         pin_memory: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
-        self.transforms = transforms
+        self.transforms = Compose([MasksToLabel(keys=["pekel", "cloud_mask"])])
         self.train_constellation_tile_paths = [
             TilePath(tile_from_id(tile_id), k)
             for k, v in train_constellation_tile_ids.items()
@@ -87,7 +88,7 @@ class TileDataModule(LightningDataModule):
             self.train_constellation_tile_paths, sampler="random"
         )
         self.val_dataset = self.create_dataset(
-            self.val_constellation_tile_paths, sampler="grid"
+            self.val_constellation_tile_paths, sampler="random"
         )
         if self.num_workers == 0:
             self.train_dataset.per_worker_init()
