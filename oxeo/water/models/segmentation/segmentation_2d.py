@@ -6,8 +6,9 @@ from loguru import logger
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
 from skimage.util.shape import view_as_blocks
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import CrossEntropyLoss
 
+from oxeo.water.datamodules.transforms import MinMaxNormalize
 from oxeo.water.models import Predictor
 
 
@@ -44,8 +45,8 @@ class Segmentation2D(LightningModule):
         self.features_start = features_start
         self.bilinear = bilinear
         self.lr = lr
-
-        self.criterion = BCEWithLogitsLoss()
+        self.preprocess = MinMaxNormalize()
+        self.criterion = CrossEntropyLoss()
         self.net = UNet(
             num_classes=num_classes,
             input_channels=input_channels,
@@ -57,15 +58,15 @@ class Segmentation2D(LightningModule):
     def forward(self, x):
         if len(x.shape) == 5:  # (B, C, T, H, W)
             x = torch.median(x, 2)[0]
-
+        x = self.preprocess(x)
         return self.net(x)
 
     def training_step(self, batch, batch_nb):
         img = batch["image"].float()
-        label = batch["pekel"]  # (B, 1, H, W)
+        label = batch["label"]  # (B, 1, H, W)
 
         pred = self(img)
-        loss = self.criterion(pred, label.float())
+        loss = self.criterion(pred, label)
 
         self.log("train/loss", loss, prog_bar=True)
 
@@ -73,11 +74,11 @@ class Segmentation2D(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         img = batch["image"].float()
-        label = batch["pekel"]
+        label = batch["label"]
 
         pred = self(img)
 
-        loss = self.criterion(pred, label.float())
+        loss = self.criterion(pred, label)
 
         self.log("val/loss", loss, prog_bar=True)
 

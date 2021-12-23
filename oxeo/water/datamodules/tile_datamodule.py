@@ -1,12 +1,15 @@
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Tuple
 
 import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 
-from oxeo.water.datamodules.datasets import TileDataset, UnionDataset
-from oxeo.water.datamodules.samplers import GridSampler, RandomSampler
+from oxeo.water.datamodules.datasets import IterableTileDataset
 from oxeo.water.models.utils import TilePath, tile_from_id
+
+from .transforms import MasksToLabel
+from .utils import notnone_collate_fn
 
 
 def worker_init_fn(worker_id):
@@ -28,86 +31,84 @@ class TileDataModule(LightningDataModule):
         self,
         train_constellation_tile_ids: Dict[str, List[str]],
         val_constellation_tile_ids: Dict[str, List[str]] = None,
-        bands: List[str] = None,
-        tile_size: int = 1000,
+        bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
+        masks: Tuple[str, ...] = ("pekel", "cloud_mask"),
+        target_size: int = 1000,
         chip_size: int = 256,
-        transforms: Optional[Callable] = None,
-        total_samples: int = 2000,
+        revisits_per_epoch: int = 500,
+        samples_per_revisit: int = 10020,
         batch_size: int = 32,
         num_workers: int = 1,
         pin_memory: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
-        self.transforms = transforms
+        self.transforms = Compose([MasksToLabel(keys=["pekel", "cloud_mask"])])
         self.train_constellation_tile_paths = [
-            [TilePath(tile_from_id(tile_id), k) for tile_id in v]
+            TilePath(tile_from_id(tile_id), k)
             for k, v in train_constellation_tile_ids.items()
+            for tile_id in v
         ]
         self.val_constellation_tile_paths = [
-            [TilePath(tile_from_id(tile_id), k) for tile_id in v]
+            TilePath(tile_from_id(tile_id), k)
             for k, v in val_constellation_tile_ids.items()
+            for tile_id in v
         ]
         self.bands = bands
-        self.tile_size = tile_size
+        self.masks = tuple(masks)
+        self.target_size = target_size
         self.chip_size = chip_size
-        self.total_samples = total_samples
+        self.revisits_per_epoch = revisits_per_epoch
+        self.samples_per_revisit = samples_per_revisit
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
-    def create_dataset(self, constellation_tile_paths: List[List[TilePath]]):
-        first_constellation_tiles = constellation_tile_paths[0]
+    def create_dataset(
+        self, constellation_tile_paths: List[List[TilePath]], sampler: str = "random"
+    ):
 
-        ds = TileDataset(
-            first_constellation_tiles,
+        ds = IterableTileDataset(
+            constellation_tile_paths,
             transform=self.transforms,
-            masks=("pekel",),
-            target_size=self.tile_size,
+            masks=self.masks,
+            target_size=self.target_size,
+            chip_size=self.chip_size,
             bands=self.bands,
+            revisits_per_epoch=self.revisits_per_epoch,
+            samples_per_revisit=self.samples_per_revisit,
+            sampler=sampler,
         )
-        for tile_paths in constellation_tile_paths[1:]:
-            ds2 = TileDataset(
-                tile_paths,
-                transform=self.transforms,
-                masks=("pekel",),
-                target_size=self.tile_size,
-                bands=self.bands,
-            )
 
-            ds = UnionDataset(ds, ds2)
         return ds
 
     def setup(self, stage=None):
         """This method is called N times (N being the number of GPUS)"""
-        self.train_dataset = self.create_dataset(self.train_constellation_tile_paths)
-        self.val_dataset = self.create_dataset(self.val_constellation_tile_paths)
+        self.train_dataset = self.create_dataset(
+            self.train_constellation_tile_paths, sampler="random"
+        )
+        self.val_dataset = self.create_dataset(
+            self.val_constellation_tile_paths, sampler="random"
+        )
         if self.num_workers == 0:
             self.train_dataset.per_worker_init()
             self.val_dataset.per_worker_init()
 
     def train_dataloader(self):
-        sampler = RandomSampler(
-            self.train_dataset, self.tile_size, self.chip_size, self.total_samples
-        )
-
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
-            sampler=sampler,
             num_workers=self.num_workers,
+            collate_fn=notnone_collate_fn,
             drop_last=True,
             pin_memory=self.pin_memory,
             worker_init_fn=worker_init_fn,
         )
 
     def val_dataloader(self):
-        sampler = GridSampler(self.val_dataset, self.tile_size, self.chip_size)
-
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
-            sampler=sampler,
             num_workers=self.num_workers,
             drop_last=True,
             pin_memory=self.pin_memory,

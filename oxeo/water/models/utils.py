@@ -156,7 +156,7 @@ def merge_masks_one_constellation(
     )
 
 
-@functools.lru_cache(maxsize=512)
+@functools.cache
 def load_tile(
     fs_mapper,
     tile_path: TilePath,
