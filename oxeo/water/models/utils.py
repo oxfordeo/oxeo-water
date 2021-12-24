@@ -114,13 +114,12 @@ date_latest = datetime(2200, 1, 1)
 
 def merge_masks_all_constellations(
     waterbody: WaterBody,
-    model_name: str,
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
     mask_list = []
     for constellation in constellations:
         try:
-            tsm = merge_masks_one_constellation(waterbody, model_name, constellation)
+            tsm = merge_masks_one_constellation(waterbody, constellation)
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
             print(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
