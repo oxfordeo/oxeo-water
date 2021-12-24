@@ -3,8 +3,11 @@ from itertools import islice
 from typing import Callable, Iterable, List, Optional
 
 import gcsfs
+import numpy as np
 import zarr
 from fsspec import asyn
+from joblib import Memory
+from loguru import logger
 from torch.utils.data import IterableDataset, get_worker_info
 
 from oxeo.satools.io import strdates_to_datetime
@@ -27,6 +30,8 @@ class IterableTileDataset(IterableDataset):
         revisits_per_epoch: int = None,
         samples_per_revisit: 100 = None,
         sampler: str = "random",
+        cache_dir: str = None,
+        cache_bytes: int = None,
     ):
         """Pytorch Dataset to load data from tiles paths
 
@@ -47,6 +52,16 @@ class IterableTileDataset(IterableDataset):
         self.revisits_per_epoch = revisits_per_epoch
         self.samples_per_revisit = samples_per_revisit
         self.sampler = sampler
+
+        if cache_dir is not None:
+            logger.info(f"Using cache_dir {cache_dir}")
+            mem = Memory(
+                cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
+            )
+            self.load_tile = mem.cache(load_tile)
+        else:
+            logger.info(f"Not using cache_dir {cache_dir}. Training may be slow.")
+            self.load_tile = load_tile
 
         self.tile_dates = {
             tile_path: strdates_to_datetime(
@@ -110,11 +125,10 @@ class IterableTileDataset(IterableDataset):
                             j = limit
                         indices.append((tile_path, timestamp, i, j))
             indices = islice(indices, worker_info.id, None, worker_info.num_workers)
-
-        for tile_path, timestamp, i, j in indices:
+        for tile_path, timestamp, i, j in np.array(indices):
             timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
-            tile_sample = load_tile(
+            tile_sample = self.load_tile(
                 self.fs_mapper,
                 tile_path,
                 masks=self.masks,
@@ -133,6 +147,8 @@ class IterableTileDataset(IterableDataset):
 
             if self.transform:
                 chip_sample = self.transform(chip_sample)
+
+            del tile_sample
             yield chip_sample
 
     def per_worker_init(self) -> None:

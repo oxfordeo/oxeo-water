@@ -5,7 +5,8 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
-from oxeo.water.datamodules.datasets import IterableTileDataset
+from oxeo.water.datamodules.datasets import TileDataset
+from oxeo.water.datamodules.samplers import RandomSampler
 from oxeo.water.models.utils import TilePath, tile_from_id
 
 from .transforms import MasksToLabel
@@ -40,6 +41,8 @@ class TileDataModule(LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 1,
         pin_memory: bool = False,
+        cache_dir: str = None,
+        cache_bytes: int = None,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -63,40 +66,45 @@ class TileDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.cache_dir = cache_dir
+        self.cache_bytes = cache_bytes
 
     def create_dataset(
         self, constellation_tile_paths: List[List[TilePath]], sampler: str = "random"
     ):
 
-        ds = IterableTileDataset(
+        ds = TileDataset(
             constellation_tile_paths,
             transform=self.transforms,
             masks=self.masks,
             target_size=self.target_size,
-            chip_size=self.chip_size,
             bands=self.bands,
-            revisits_per_epoch=self.revisits_per_epoch,
-            samples_per_revisit=self.samples_per_revisit,
-            sampler=sampler,
+            cache_dir=self.cache_dir,
+            cache_bytes=self.cache_bytes,
         )
 
         return ds
 
     def setup(self, stage=None):
         """This method is called N times (N being the number of GPUS)"""
-        self.train_dataset = self.create_dataset(
-            self.train_constellation_tile_paths, sampler="random"
-        )
-        self.val_dataset = self.create_dataset(
-            self.val_constellation_tile_paths, sampler="random"
-        )
+        self.train_dataset = self.create_dataset(self.train_constellation_tile_paths)
+        self.val_dataset = self.create_dataset(self.val_constellation_tile_paths)
         if self.num_workers == 0:
             self.train_dataset.per_worker_init()
             self.val_dataset.per_worker_init()
 
     def train_dataloader(self):
+
+        sampler = RandomSampler(
+            self.train_dataset,
+            chip_size=self.chip_size,
+            revisits_per_epoch=self.revisits_per_epoch,
+            samples_per_revisit=self.samples_per_revisit,
+        )
+
         return DataLoader(
             self.train_dataset,
+            sampler=sampler,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             collate_fn=notnone_collate_fn,
@@ -106,9 +114,18 @@ class TileDataModule(LightningDataModule):
         )
 
     def val_dataloader(self):
+
+        sampler = RandomSampler(
+            self.val_dataset,
+            chip_size=self.chip_size,
+            revisits_per_epoch=self.revisits_per_epoch,
+            samples_per_revisit=self.samples_per_revisit,
+        )
+
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
+            sampler=sampler,
             num_workers=self.num_workers,
             drop_last=True,
             pin_memory=self.pin_memory,
