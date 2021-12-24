@@ -47,11 +47,13 @@ datamodule:
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
   chip_size: 250
-  revisits_per_epoch: 1000
+  revisits_per_epoch: 512
   samples_per_revisit: 250
   batch_size: 64
-  num_workers: 8
-  pin_memory: True
+  num_workers: 4
+  pin_memory: False
+  cache_dir: "../../cache"
+  cache_bytes: 1e11 # a bit less than a 1TB
 
 callbacks:
   log_f1_precision_recall_heatmap: None

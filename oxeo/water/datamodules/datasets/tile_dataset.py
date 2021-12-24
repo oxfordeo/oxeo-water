@@ -3,6 +3,8 @@ from typing import Callable, Iterable, List, Optional
 import gcsfs
 import zarr
 from fsspec import asyn
+from joblib import Memory
+from loguru import logger
 from torch.utils.data import Dataset
 
 from oxeo.satools.io import strdates_to_datetime
@@ -21,6 +23,8 @@ class TileDataset(Dataset):
         masks: Iterable[str] = (),
         target_size: int = None,
         bands: Iterable[str] = None,
+        cache_dir: str = None,
+        cache_bytes: int = None,
     ):
         """Pytorch Dataset to load data from tiles paths
 
@@ -38,8 +42,18 @@ class TileDataset(Dataset):
         self.target_size = target_size
         self.bands = tuple(bands)
 
+        if cache_dir is not None:
+            logger.info(f"Using cache_dir {cache_dir}")
+            mem = Memory(
+                cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
+            )
+            self.load_tile = mem.cache(load_tile)
+        else:
+            logger.info(f"Not using cache_dir {cache_dir}. Training may be slow.")
+            self.load_tile = load_tile
+
         self.tile_dates = {
-            tile_path.tile.id: strdates_to_datetime(
+            tile_path: strdates_to_datetime(
                 zarr.open_array(tile_path.timestamps_path)[:]
             )
             for tile_path in self.tile_paths
@@ -55,13 +69,11 @@ class TileDataset(Dataset):
             return False
 
     def __getitem__(self, index):
-        tile_id, timestamp, i, j, chip_size = index
+        tile_path, timestamp, i, j, chip_size = index
 
-        timestamp_index = np_index(self.tile_dates[tile_id], timestamp)
+        timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
-        tile_path = self.tile_paths[self.tiles_ids.index(tile_id)]
-
-        tile_sample = load_tile(
+        tile_sample = self.load_tile(
             self.fs_mapper,
             tile_path,
             masks=self.masks,

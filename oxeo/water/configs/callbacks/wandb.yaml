@@ -23,4 +23,4 @@ log_confusion_matrix:
 
 log_image_predictions:
   _target_: oxeo.water.callbacks.wandb_callbacks.LogImagePredictions
-  num_samples: 16
+  num_samples: 8

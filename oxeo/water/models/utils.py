@@ -1,4 +1,3 @@
-import functools
 from datetime import datetime
 from typing import List, Tuple, Union
 
@@ -156,7 +155,6 @@ def merge_masks_one_constellation(
     )
 
 
-@functools.cache
 def load_tile(
     fs_mapper,
     tile_path: TilePath,

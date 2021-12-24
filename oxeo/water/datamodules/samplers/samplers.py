@@ -8,9 +8,13 @@ from torch.utils.data import Dataset, Sampler
 @attr.s
 class RandomSampler(Sampler):
     dataset: Dataset = attr.ib()
-    tile_size: int = attr.ib(converter=int)
     chip_size: int = attr.ib(converter=int)
-    length: int = attr.ib(converter=int)
+    revisits_per_epoch: int = attr.ib(converter=int)
+    samples_per_revisit: int = attr.ib(converter=int)
+    length: int = attr.ib(init=False)
+
+    def __attrs_post_init__(self):
+        self.length = self.revisits_per_epoch * self.samples_per_revisit
 
     def __iter__(self) -> Iterator[Tuple[int, int, int]]:
         """Return the index of a dataset.
@@ -18,16 +22,29 @@ class RandomSampler(Sampler):
             (tile_index, i, j) coordinates to index a dataset
         """
         tile_dates = self.dataset.tile_dates
+        target_size = self.dataset.target_size
+
+        unpacked_tile_dates = [
+            (
+                tile_path,
+                v,
+            )
+            for tile_path in tile_dates.keys()
+            for v in tile_dates[tile_path]
+        ]
+
+        tile_revisits_to_use = random.choices(
+            unpacked_tile_dates, k=self.revisits_per_epoch
+        )
+
         for _ in range(self.length):
             # Choose a random tile_index
-            tile_id = random.choice(list(tile_dates.keys()))
-
-            timestamp = random.choice(tile_dates[tile_id])
+            tile_path, timestamp = random.choice(tile_revisits_to_use)
 
             # Choose random i and j
-            i, j = random.choices(range(self.tile_size - self.chip_size + 1), k=2)
+            i, j = random.choices(range(target_size - self.chip_size + 1), k=2)
 
-            yield tile_id, timestamp, i, j, self.chip_size
+            yield tile_path, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
         """Return the number of samples in a single epoch.
