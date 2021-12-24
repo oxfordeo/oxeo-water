@@ -33,6 +33,7 @@ model:
   input_channels: 6
   lr: 0.001
 
+
 datamodule:
   train_constellation_tile_ids:
     sentinel-2: [43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
@@ -54,6 +55,8 @@ datamodule:
   pin_memory: False
   cache_dir: "../../cache"
   cache_bytes: 1e11 # a bit less than a 1TB
+
+
 
 callbacks:
   log_f1_precision_recall_heatmap: None
