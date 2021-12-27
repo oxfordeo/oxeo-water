@@ -7,6 +7,7 @@ from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
 from skimage.util.shape import view_as_blocks
 from torch.nn import CrossEntropyLoss
+from tqdm import tqdm
 
 from oxeo.water.datamodules.transforms import MinMaxNormalize
 from oxeo.water.models import Predictor
@@ -123,44 +124,76 @@ class Segmentation2D(LightningModule):
 class Segmentation2DPredictor(Predictor):
     def __init__(
         self,
-        batch_size=128,
-        ckpt_path: str = None,
-        input_channels: int = 13,
-        num_classes: int = 1,
+        batch_size=32,
+        artifact: str = "oxeo/semseg/experiment-ckpts:v14/epoch_011.ckpt",
+        input_channels: int = 6,
+        num_classes: int = 3,
+        chip_size: int = 250,
+        label: str = "water",
     ):
+        import wandb
+
+        run = wandb.init()
+        artifact = run.use_artifact(artifact, type="checkpoints")
+        artifact_ckpt = artifact.download()
         self.model = Segmentation2D.load_from_checkpoint(
-            ckpt_path, input_channels=input_channels, num_classes=num_classes
+            artifact_ckpt, input_channels=input_channels, num_classes=num_classes
         )
+        self.num_classes = num_classes
         self.batch_size = batch_size
-        self.model.eval().cuda()
+        self.chip_size = chip_size
+        self.label = label
+        self.model.eval()
 
     def predict(self, input):
-        logger.info("Moving model to GPU.")
-        self.model.cuda()
-        input_view = (
-            view_as_blocks(input, (input.shape[0], input.shape[1], 100, 100))
-            .reshape(-1, input.shape[0], input.shape[1], 100, 100)
+
+        revisits = input.shape[0]
+        bands = input.shape[1]
+        H = input.shape[2]
+        W = input.shape[3]
+
+        arr = (
+            view_as_blocks(input, (revisits, bands, self.chip_size, self.chip_size))
+            .reshape(-1, revisits, bands, self.chip_size, self.chip_size)
             .astype(np.int16)
         )
+        block_shape = arr.shape
+        arr = np.vstack(arr)  # stack all revisits
         preds = []
-        for revisit in range(input_view.shape[1]):
-            for patch in range(0, input_view.shape[0], self.batch_size):
-                input_tensor = torch.as_tensor(
-                    input_view[patch : patch + self.batch_size, revisit, :, :]
-                ).float()
-                preds.extend(
-                    torch.sigmoid(self.model(input_tensor.cuda())).data.cpu().numpy()
-                )
+        logger.info(
+            f"Starting prediction using batch_size of {self.batch_size} for {revisits} revisits."
+        )
+        for patch in tqdm(range(0, arr.shape[0], self.batch_size)):
+            input_tensor = torch.as_tensor(arr[patch : patch + self.batch_size]).float()
 
-        logger.info("Moving model to CPU.")
-        self.model.cpu()
+            current_pred = self.model(input_tensor)
+            current_pred = torch.softmax(current_pred, dim=1)
+            current_pred = torch.argmax(current_pred, 1)
+
+            preds.extend(current_pred.data.numpy())
+
         preds = np.array(preds)
+
         preds = preds.reshape(
-            (input_view.shape[0], input_view.shape[1], 100, 100), order="F"
+            (block_shape[0], block_shape[1], self.chip_size, self.chip_size)
         )
-        return reconstruct_from_patches(
-            preds, input_view.shape[1], 100, input.shape[-2], input.shape[-1]
+
+        preds = preds.reshape(
+            (
+                block_shape[0],
+                block_shape[1],
+                self.chip_size,
+                self.chip_size,
+            ),
+            order="F",
         )
+        preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
+        if self.label == "water":
+            preds[preds != 1] = 0
+        elif self.label == "cloud":
+            preds[preds != 2] = 0
+            preds[preds == 2] = 1
+        return preds
 
 
 def reconstruct_from_patches(
