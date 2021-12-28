@@ -125,19 +125,15 @@ class Segmentation2DPredictor(Predictor):
     def __init__(
         self,
         batch_size=32,
-        artifact: str = "oxeo/semseg/experiment-ckpts:v14/epoch_011.ckpt",
+        ckpt_path: str = "gs://oxeo-models/epoch_011.ckpt",
         input_channels: int = 6,
         num_classes: int = 3,
         chip_size: int = 250,
         label: str = "water",
+        fs=None,
     ):
-        import wandb
-
-        run = wandb.init()
-        artifact = run.use_artifact(artifact, type="checkpoints")
-        artifact_ckpt = artifact.download()
         self.model = Segmentation2D.load_from_checkpoint(
-            artifact_ckpt, input_channels=input_channels, num_classes=num_classes
+            fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
         )
         self.num_classes = num_classes
         self.batch_size = batch_size
