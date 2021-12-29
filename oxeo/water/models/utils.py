@@ -112,13 +112,13 @@ date_latest = datetime(2200, 1, 1)
 
 
 def merge_masks_all_constellations(
-    waterbody: WaterBody,
+    waterbody: WaterBody, mask: str
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
     mask_list = []
     for constellation in constellations:
         try:
-            tsm = merge_masks_one_constellation(waterbody, constellation)
+            tsm = merge_masks_one_constellation(waterbody, constellation, mask)
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
             print(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
@@ -129,6 +129,7 @@ def merge_masks_all_constellations(
 def merge_masks_one_constellation(
     waterbody: WaterBody,
     constellation: str,
+    mask: str,
 ):
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
@@ -145,7 +146,7 @@ def merge_masks_one_constellation(
     ]
     paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
     c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
-    data_arr = constellation_dataarray(c_data, data_path="mask/pekel")
+    data_arr = constellation_dataarray(c_data, data_path=f"mask/{mask}")
 
     return TimeseriesMask(
         data=data_arr,

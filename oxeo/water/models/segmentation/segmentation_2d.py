@@ -141,7 +141,7 @@ class Segmentation2DPredictor(Predictor):
         self.label = label
         self.model.eval()
 
-    def predict(self, input):
+    def predict(self, input, constellation=None):
 
         revisits = input.shape[0]
         bands = input.shape[1]
