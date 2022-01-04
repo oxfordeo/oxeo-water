@@ -5,6 +5,8 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
+from joblib import Parallel, delayed
+from loguru import logger
 from pyproj import CRS
 from rasterio import features, transform
 from satextractor.models import Tile
@@ -17,45 +19,59 @@ from skimage.morphology import (
     remove_small_objects,
     square,
 )
+from tqdm import tqdm
 
 from oxeo.water.models.utils import TimeseriesMask, WaterBody
+from oxeo.water.utils import tqdm_joblib
 
 UNITS = ["pixel", "meter"]
+
+
+def get_segmentation_area(tsm, tiles, geom):
+    logger.info(f"Calulating metrics for {tsm.constellation}")
+    # osm_raster must be created separately for each constellation
+    # as they have different resolutions
+    shape = tsm.data.shape[2:]
+    epsg = tiles[0].epsg
+    osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
+    logger.info(f"Created OSM mask with {osm_raster.shape=}")
+
+    data = mask_cube(tsm.data, osm_raster)
+    logger.info(f"Masked data cube with {data.shape=}")
+
+    area = segmentation_area(data, unit="meter", resolution=tsm.resolution)
+    logger.info(f"Calculated 1D area array with {area.shape=}")
+
+    df = pd.DataFrame(
+        data={
+            "date": tsm.data.revisits.compute().data,
+            "area": area.compute().data,
+            "constellation": tsm.constellation,
+        }
+    )
+    return df
 
 
 def segmentation_area_multiple(
     segs: List[TimeseriesMask],
     waterbody: WaterBody,
+    n_jobs=-1,
+    verbose=0,
 ) -> pd.DataFrame:
 
     geom = waterbody.geometry
     tiles = [tp.tile for tp in waterbody.paths]
 
-    dfs = []
-    for tsm in segs:
-        print(f"Calulating metrics for {tsm.constellation}")
-        # osm_raster must be created separately for each constellation
-        # as they have different resolutions
-        shape = tsm.data.shape[2:]
-        epsg = tiles[0].epsg
-        osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
-        print(f"Created OSM mask with {osm_raster.shape=}")
-
-        data = mask_cube(tsm.data, osm_raster)
-        print(f"Masked data cube with {data.shape=}")
-
-        area = segmentation_area(data, unit="meter", resolution=tsm.resolution)
-        print(f"Calculated 1D area array with {area.shape=}")
-
-        df = pd.DataFrame(
-            data={
-                "date": tsm.data.revisits.compute().data,
-                "area": area.compute().data,
-                "constellation": tsm.constellation,
-            }
+    with tqdm_joblib(
+        tqdm(
+            desc="parallel calculating metrics for constellations.",
+            total=len(segs),
+        ),
+    ):
+        dfs = Parallel(n_jobs=n_jobs, verbose=verbose)(
+            [delayed(get_segmentation_area)(tsm, tiles, geom) for tsm in segs],
         )
-        dfs.append(df)
-        print("Inserted into DF")
+
     return pd.concat(dfs, axis=0)
 
 
