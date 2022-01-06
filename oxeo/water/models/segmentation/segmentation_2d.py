@@ -191,6 +191,7 @@ class Segmentation2DPredictor(Predictor):
         return preds.numpy()
 
 
+
 def reconstruct_from_patches(
     images, revisits, patch_size, target_size_rows, target_size_cols
 ):
