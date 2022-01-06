@@ -125,11 +125,10 @@ class Segmentation2DPredictor(Predictor):
     def __init__(
         self,
         batch_size=32,
-        ckpt_path: str = "gs://oxeo-models/epoch_011.ckpt",
+        ckpt_path: str = "gs://oxeo-models/last.ckpt",
         input_channels: int = 6,
         num_classes: int = 3,
         chip_size: int = 250,
-        label: str = "water",
         fs=None,
     ):
         self.model = Segmentation2D.load_from_checkpoint(
@@ -138,7 +137,6 @@ class Segmentation2DPredictor(Predictor):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.chip_size = chip_size
-        self.label = label
         self.model.eval()
 
     def predict(self, input, constellation=None):
@@ -184,11 +182,6 @@ class Segmentation2DPredictor(Predictor):
             order="F",
         )
         preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
-        if self.label == "water":
-            preds[preds != 1] = 0
-        elif self.label == "cloud":
-            preds[preds != 2] = 0
-            preds[preds == 2] = 1
         return preds
 
 
