@@ -12,13 +12,7 @@ from rasterio import features, transform
 from satextractor.models import Tile
 from scipy import stats
 from shapely.geometry import MultiPolygon, Polygon
-from skimage.morphology import (
-    closing,
-    label,
-    remove_small_holes,
-    remove_small_objects,
-    square,
-)
+from skimage.morphology import closing, remove_small_holes, remove_small_objects, square
 from tqdm import tqdm
 
 from oxeo.water.models.utils import TimeseriesMask, WaterBody
@@ -27,7 +21,7 @@ from oxeo.water.utils import tqdm_joblib
 UNITS = ["pixel", "meter"]
 
 
-def get_segmentation_area(tsm, tiles, geom):
+def get_segmentation_area(tsm, tiles, geom, label):
     logger.info(f"Calulating metrics for {tsm.constellation}")
     # osm_raster must be created separately for each constellation
     # as they have different resolutions
@@ -36,10 +30,10 @@ def get_segmentation_area(tsm, tiles, geom):
     osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
     logger.info(f"Created OSM mask with {osm_raster.shape=}")
 
-    data = mask_cube(tsm.data, osm_raster)
+    data = mask_cube(tsm.data, osm_raster, label)
     logger.info(f"Masked data cube with {data.shape=}")
 
-    area = segmentation_area(data, unit="meter", resolution=tsm.resolution)
+    area = segmentation_area(data, unit="meter", resolution=tsm.resolution, label=label)
     logger.info(f"Calculated 1D area array with {area.shape=}")
 
     df = pd.DataFrame(
@@ -55,6 +49,7 @@ def get_segmentation_area(tsm, tiles, geom):
 def segmentation_area_multiple(
     segs: List[TimeseriesMask],
     waterbody: WaterBody,
+    label: int = 1,
     n_jobs=-1,
     verbose=0,
 ) -> pd.DataFrame:
@@ -69,17 +64,16 @@ def segmentation_area_multiple(
         ),
     ):
         dfs = Parallel(n_jobs=n_jobs, verbose=verbose)(
-            [delayed(get_segmentation_area)(tsm, tiles, geom) for tsm in segs],
+            [delayed(get_segmentation_area)(tsm, tiles, geom, label) for tsm in segs],
         )
 
     return pd.concat(dfs, axis=0)
 
 
-def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray):
-    # TODO will need to modify this once the incoming masks
-    # have multiple classes (land/water/cloud etc)
-    # Basically must just set all non-water to 0 and all water to 1
-    lab = arr[i, 0, ...].compute().astype(bool)
+def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label: int = 1):
+    lab = arr[i, 0, ...].compute()
+    lab[lab != label] = 0
+    lab = lab.astype(bool)
     lab = closing(lab, square(3))
     lab = remove_small_holes(lab, area_threshold=50, connectivity=2)
     lab = remove_small_objects(lab, min_size=50, connectivity=2)
@@ -96,7 +90,9 @@ def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray):
     return da_arr
 
 
-def mask_cube(data: xr.DataArray, osm_raster: np.ndarray) -> xr.DataArray:
+def mask_cube(
+    data: xr.DataArray, osm_raster: np.ndarray, label: int = 1
+) -> xr.DataArray:
     # TODO Probably tere's some clever Dasky stuff to do here
     # Right now it's just a sequential loop
     all_masks = [mask_single(data, i, osm_raster) for i in range(len(data))]
@@ -111,6 +107,7 @@ def segmentation_area(
     seg: Union[np.ndarray, xr.DataArray],
     unit: str = "pixel",
     resolution: Optional[int] = 1,
+    label: int = 1,
 ) -> Union[np.ndarray, xr.DataArray]:
     """Get the total area of a segmentation (Nx..xHxW)
 
@@ -123,7 +120,7 @@ def segmentation_area(
         float: total area (Nx...)
     """
     assert unit in UNITS, f"unit must be one of {UNITS}"
-    total_area = (seg > 0).sum(axis=(-2, -1))
+    total_area = (seg == label).sum(axis=(-2, -1))
 
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
