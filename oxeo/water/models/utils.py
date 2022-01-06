@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 import xarray as xr
 import zarr
 from attr import define
+from loguru import logger
 from pystac.extensions.eo import Band
 from satextractor.models import Tile
 from satextractor.models.constellation_info import BAND_INFO
@@ -160,9 +161,9 @@ def load_tile(
     tile_path: TilePath,
     masks: Tuple[str, ...] = (),
     revisit: int = None,
-    target_size: int = None,
     bands: Tuple[str, ...] = None,
 ) -> torch.Tensor:
+    logger.info(f"Loading file from {tile_path}")
     if bands is not None:
         band_common_names = get_band_list(tile_path.constellation)
         band_indices = [band_common_names.index(b) for b in bands]
@@ -182,14 +183,38 @@ def load_tile(
 
     sample["image"] = torch.as_tensor(arr)
 
-    if target_size is not None:
-        for key in sample.keys():
-            if key == "image":
-                sample[key] = resize(
-                    sample[key], target_size, InterpolationMode.BILINEAR
-                )
-            else:
-                sample[key] = resize(
-                    sample[key], target_size, InterpolationMode.NEAREST
-                )
     return sample
+
+
+def resize_sample(
+    sample: Union[torch.Tensor, Dict[str, torch.Tensor]],
+    target_size: int = None,
+    interpolation=InterpolationMode.NEAREST,
+) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Resize sample to target
+
+    Args:
+        sample (Union[torch.Tensor, Dict[str, torch.Tensor]]): Can be a tensor or dict of tensors
+        target_size (int, optional): Target size. Defaults to None.
+        interpolation ([type], optional): Only used when sample is torch.Tensor.
+                                          Defaults to InterpolationMode.NEAREST.
+
+    Returns:
+        torch.Tensor: the resampled tensor or dict of tensors
+    """
+    logger.info(f"Resizing sample to {target_size}")
+    if target_size is not None:
+        if isinstance(sample, dict):
+            resized_sample = {}
+            for key in sample.keys():
+                if key == "image":
+                    resized_sample[key] = resize(
+                        sample[key], target_size, InterpolationMode.BILINEAR
+                    )
+                else:
+                    resized_sample[key] = resize(
+                        sample[key], target_size, InterpolationMode.NEAREST
+                    )
+        elif isinstance(sample, torch.Tensor):
+            resized_sample = resize(sample, target_size, interpolation)
+    return resized_sample

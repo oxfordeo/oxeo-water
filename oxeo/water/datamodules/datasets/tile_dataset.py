@@ -8,7 +8,7 @@ from loguru import logger
 from torch.utils.data import Dataset
 
 from oxeo.satools.io import strdates_to_datetime
-from oxeo.water.models.utils import TilePath, load_tile
+from oxeo.water.models.utils import TilePath, load_tile, resize_sample
 
 from .utils import np_index
 
@@ -47,10 +47,7 @@ class TileDataset(Dataset):
             mem = Memory(
                 cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
             )
-            self.load_tile = mem.cache(load_tile)
-        else:
-            logger.info(f"Not using cache_dir {cache_dir}. Training may be slow.")
-            self.load_tile = load_tile
+            self.load_tile_and_resize = mem.cache(self.load_tile_and_resizeload_tile)
 
         self.tile_dates = {
             tile_path: strdates_to_datetime(
@@ -61,26 +58,26 @@ class TileDataset(Dataset):
 
         self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
 
-    def valid_date(self, tile_id: str, timestamp):
-        dates = self.tile_dates.get(tile_id)
-        if dates is not None:
-            return timestamp in dates
-        else:
-            return False
+    def load_tile_and_resize(
+        self,
+        tile_path: TilePath,
+        revisit: int = None,
+    ):
+        sample = load_tile(
+            self.fs_mapper,
+            tile_path,
+            masks=self.masks,
+            revisit=revisit,
+            bands=self.bands,
+        )
+        sample = resize_sample(sample, self.target_size)
 
     def __getitem__(self, index):
         tile_path, timestamp, i, j, chip_size = index
 
         timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
-        tile_sample = self.load_tile(
-            self.fs_mapper,
-            tile_path,
-            masks=self.masks,
-            revisit=timestamp_index,
-            target_size=self.target_size,
-            bands=self.bands,
-        )
+        tile_sample = self.load_tile_and_resize(tile_path, timestamp_index)
 
         chip_sample = {}
         for key in tile_sample.keys():
