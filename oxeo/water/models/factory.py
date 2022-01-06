@@ -12,10 +12,7 @@ def model_factory(name: str) -> ModelDef:
         "cloud_mask": ModelDef(
             predictor=CloudMaskPredictor,
         ),
-        "cnn_water_mask": ModelDef(
-            predictor=Segmentation2DPredictor,
-        ),
-        "cnn_cloud_mask": ModelDef(
+        "cnn": ModelDef(
             predictor=Segmentation2DPredictor,
         ),
     }
