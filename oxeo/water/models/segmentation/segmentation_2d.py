@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from oxeo.water.datamodules.transforms import MinMaxNormalize
 from oxeo.water.models import Predictor
+from oxeo.water.models.utils import resize_sample
 
 
 class Segmentation2D(LightningModule):
@@ -124,7 +125,7 @@ class Segmentation2D(LightningModule):
 class Segmentation2DPredictor(Predictor):
     def __init__(
         self,
-        batch_size=32,
+        batch_size=16,
         ckpt_path: str = "gs://oxeo-models/last.ckpt",
         input_channels: int = 6,
         num_classes: int = 3,
@@ -139,8 +140,12 @@ class Segmentation2DPredictor(Predictor):
         self.chip_size = chip_size
         self.model.eval()
 
-    def predict(self, input, constellation=None):
+    def predict(self, sample, target_size=None):
+        original_shape = sample["image"].shape
 
+        sample = resize_sample(sample, target_size)
+
+        input = sample["image"].numpy()
         revisits = input.shape[0]
         bands = input.shape[1]
         H = input.shape[2]
@@ -182,7 +187,9 @@ class Segmentation2DPredictor(Predictor):
             order="F",
         )
         preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
-        return preds
+        preds = resize_sample(torch.as_tensor(preds), original_shape[-1])
+        return preds.numpy()
+
 
 
 def reconstruct_from_patches(
