@@ -12,19 +12,14 @@ from rasterio import features, transform
 from satextractor.models import Tile
 from scipy import stats
 from shapely.geometry import MultiPolygon, Polygon
-from skimage.morphology import (
-    closing,
-    label,
-    remove_small_holes,
-    remove_small_objects,
-    square,
-)
+from skimage.morphology import closing, remove_small_holes, remove_small_objects, square
 from tqdm import tqdm
 
 from oxeo.water.models.utils import TimeseriesMask, WaterBody
 from oxeo.water.utils import tqdm_joblib
 
 UNITS = ["pixel", "meter"]
+
 
 
 def get_segmentation_area(tsm, tiles, geom, label_to_mask):
@@ -35,7 +30,6 @@ def get_segmentation_area(tsm, tiles, geom, label_to_mask):
     epsg = tiles[0].epsg
     osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
     logger.info(f"Created OSM mask with {osm_raster.shape=}")
-
     data = mask_cube(tsm.data, osm_raster, label_to_mask)
     logger.info(f"Masked data cube with {data.shape=}")
 
@@ -134,7 +128,6 @@ def segmentation_area(
     """
     assert unit in UNITS, f"unit must be one of {UNITS}"
     total_area = (seg == label_to_mask).sum(axis=(-2, -1))
-
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
         total_area *= resolution ** 2
