@@ -12,14 +12,19 @@ from rasterio import features, transform
 from satextractor.models import Tile
 from scipy import stats
 from shapely.geometry import MultiPolygon, Polygon
-from skimage.morphology import closing, remove_small_holes, remove_small_objects, square
+from skimage.morphology import (
+    closing,
+    label,
+    remove_small_holes,
+    remove_small_objects,
+    square,
+)
 from tqdm import tqdm
 
 from oxeo.water.models.utils import TimeseriesMask, WaterBody
 from oxeo.water.utils import tqdm_joblib
 
 UNITS = ["pixel", "meter"]
-
 
 
 def get_segmentation_area(tsm, tiles, geom, label_to_mask):
