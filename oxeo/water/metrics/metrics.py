@@ -21,7 +21,8 @@ from oxeo.water.utils import tqdm_joblib
 UNITS = ["pixel", "meter"]
 
 
-def get_segmentation_area(tsm, tiles, geom, label):
+
+def get_segmentation_area(tsm, tiles, geom, label_to_mask):
     logger.info(f"Calulating metrics for {tsm.constellation}")
     # osm_raster must be created separately for each constellation
     # as they have different resolutions
@@ -29,11 +30,12 @@ def get_segmentation_area(tsm, tiles, geom, label):
     epsg = tiles[0].epsg
     osm_raster = rasterize_geom(geom=geom, tiles=tiles, shape=shape, epsg=epsg)
     logger.info(f"Created OSM mask with {osm_raster.shape=}")
-
-    data = mask_cube(tsm.data, osm_raster, label)
+    data = mask_cube(tsm.data, osm_raster, label_to_mask)
     logger.info(f"Masked data cube with {data.shape=}")
 
-    area = segmentation_area(data, unit="meter", resolution=tsm.resolution, label=label)
+    area = segmentation_area(
+        data, unit="meter", resolution=tsm.resolution, label_to_mask=label_to_mask
+    )
     logger.info(f"Calculated 1D area array with {area.shape=}")
 
     df = pd.DataFrame(
@@ -49,7 +51,7 @@ def get_segmentation_area(tsm, tiles, geom, label):
 def segmentation_area_multiple(
     segs: List[TimeseriesMask],
     waterbody: WaterBody,
-    label: int = 1,
+    label_to_mask: int = 1,
     n_jobs=-1,
     verbose=0,
 ) -> pd.DataFrame:
@@ -64,15 +66,18 @@ def segmentation_area_multiple(
         ),
     ):
         dfs = Parallel(n_jobs=n_jobs, verbose=verbose)(
-            [delayed(get_segmentation_area)(tsm, tiles, geom, label) for tsm in segs],
+            [
+                delayed(get_segmentation_area)(tsm, tiles, geom, label_to_mask)
+                for tsm in segs
+            ],
         )
 
     return pd.concat(dfs, axis=0)
 
 
-def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label: int = 1):
+def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label_to_mask: int = 1):
     lab = arr[i, 0, ...].compute()
-    lab[lab != label] = 0
+    lab = lab.where(lab != label_to_mask, 0)
     lab = lab.astype(bool)
     lab = closing(lab, square(3))
     lab = remove_small_holes(lab, area_threshold=50, connectivity=2)
@@ -91,11 +96,13 @@ def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label: int = 1):
 
 
 def mask_cube(
-    data: xr.DataArray, osm_raster: np.ndarray, label: int = 1
+    data: xr.DataArray, osm_raster: np.ndarray, label_to_mask: int = 1
 ) -> xr.DataArray:
     # TODO Probably tere's some clever Dasky stuff to do here
     # Right now it's just a sequential loop
-    all_masks = [mask_single(data, i, osm_raster) for i in range(len(data))]
+    all_masks = [
+        mask_single(data, i, osm_raster, label_to_mask) for i in range(len(data))
+    ]
     block = da.stack(all_masks, axis=0)
     # Dropped the 'band' dimension as not needed
     # Might be better to keep it for consistency with other stuff?
@@ -107,7 +114,7 @@ def segmentation_area(
     seg: Union[np.ndarray, xr.DataArray],
     unit: str = "pixel",
     resolution: Optional[int] = 1,
-    label: int = 1,
+    label_to_mask: int = 1,
 ) -> Union[np.ndarray, xr.DataArray]:
     """Get the total area of a segmentation (Nx..xHxW)
 
@@ -120,8 +127,7 @@ def segmentation_area(
         float: total area (Nx...)
     """
     assert unit in UNITS, f"unit must be one of {UNITS}"
-    total_area = (seg == label).sum(axis=(-2, -1))
-
+    total_area = (seg == label_to_mask).sum(axis=(-2, -1))
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
         total_area *= resolution ** 2
