@@ -163,7 +163,7 @@ def load_tile(
     revisit: int = None,
     bands: Tuple[str, ...] = None,
 ) -> torch.Tensor:
-    logger.info(f"Loading file from {tile_path}")
+    logger.debug(f"Loading file from {tile_path}")
     if bands is not None:
         band_common_names = get_band_list(tile_path.constellation)
         band_indices = [band_common_names.index(b) for b in bands]
