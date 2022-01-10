@@ -22,6 +22,7 @@ from skimage.morphology import (
     square,
 )
 from tqdm import tqdm
+from zarr.errors import PathNotFoundError
 
 from oxeo.water.models.utils import (
     TilePath,
@@ -213,17 +214,20 @@ def tile_stat_per_band(
         for constellation in constellations:
             tile = tile_from_id(tile_id)
             tile_path = TilePath(tile, constellation)
-            zarr_arr = zarr.open(tile_path.data_path, "r")
-            revisits = zarr_arr.shape[0]
-            for i in range(0, revisits, revisits_batch):
-                tile_tensor = load_tile(
-                    fs_mapper=fs_mapper,
-                    tile_path=tile_path,
-                    revisit=slice(i, i + revisits_batch),
-                    bands=bands,
-                )
-                tile_mean = stat(tile_tensor["image"].numpy(), axis=(2, 3))
-                res[constellation].extend(tile_mean.tolist())
+            try:
+                zarr_arr = zarr.open(tile_path.data_path, "r")
+                revisits = zarr_arr.shape[0]
+                for i in range(0, revisits, revisits_batch):
+                    tile_tensor = load_tile(
+                        fs_mapper=fs_mapper,
+                        tile_path=tile_path,
+                        revisit=slice(i, i + revisits_batch),
+                        bands=bands,
+                    )
+                    tile_mean = stat(tile_tensor["image"].numpy(), axis=(2, 3))
+                    res[constellation].extend(tile_mean.tolist())
+            except PathNotFoundError:
+                logger.error("Path {tile_path.data_path} not found.")
 
     for key in res.keys():
         res[key] = np.array(res[key]).mean(0)
