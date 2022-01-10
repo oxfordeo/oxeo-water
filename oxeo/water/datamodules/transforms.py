@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 
 import kornia
 import torch
@@ -10,6 +10,26 @@ class MinMaxNormalize(nn.Module):
     def forward(self, x) -> Tensor:
         x = kornia.enhance.normalize_min_max(x, min_val=0.0, max_val=1.0, eps=1e-06)
         return x
+
+
+class ConstellationNormalize:
+    def __init__(
+        self,
+        band_mean: Dict[str, Dict[str, List]] = None,
+        band_std: Dict[str, Dict[str, List]] = None,
+    ):
+        self.band_mean = band_mean
+        self.band_std = band_std
+
+    def __call__(self, sample):
+        constellation_mean = self.band_mean[sample["constellation"]]
+        constellation_std = self.band_std[sample["constellation"]]
+        img = sample["image"]
+        img = nn.functional.normalize(
+            img, constellation_mean.values(), constellation_std.values()
+        )
+        sample["image"] = img
+        return sample
 
 
 class MasksToLabel:
