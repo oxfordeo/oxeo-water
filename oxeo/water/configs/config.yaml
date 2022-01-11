@@ -46,3 +46,5 @@ seed: null
 # name of the run is accessed by loggers
 # should be used along with experiment mode
 name: null
+
+log_level: INFO

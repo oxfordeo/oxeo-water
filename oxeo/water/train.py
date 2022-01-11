@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 
 import hydra
@@ -25,6 +26,7 @@ def train(config: DictConfig) -> Optional[float]:
         Optional[float]: Metric score for hyperparameter optimization.
     """
 
+    os.environ["LOGURU_LEVEL"] = config.get("log_level")
     # Set seed for random number generators in pytorch, numpy and python.random
     if config.get("seed"):
         seed_everything(config.seed, workers=True)
