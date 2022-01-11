@@ -26,8 +26,8 @@ class TileDataset(Dataset):
         bands: Iterable[str] = None,
         cache_dir: str = None,
         cache_bytes: int = None,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: str = "0001-01-01",
+        end_date: str = "9999-01-01",
     ):
         """Tile dataset
 
@@ -39,8 +39,8 @@ class TileDataset(Dataset):
             bands (Iterable[str], optional): Bands to load. Defaults to None.
             cache_dir (str, optional): A cache dir in local disk to store load_tile function. Defaults to None.
             cache_bytes (int, optional): How many bytes to use as cache in local disk. Defaults to None.
-            start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to None.
-            end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to None.
+            start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to 0001-01-01.
+            end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to 9999-01-01.
         """
         super().__init__()
 

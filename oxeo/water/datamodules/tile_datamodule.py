@@ -47,6 +47,10 @@ class TileDataModule(LightningDataModule):
         pin_memory: bool = False,
         cache_dir: str = None,
         cache_bytes: int = None,
+        train_start_date: str = "0001-01-01",
+        train_end_date: str = "9999-01-01",
+        val_start_date: str = "0001-01-01",
+        val_end_date: str = "9999-01-01",
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -79,9 +83,16 @@ class TileDataModule(LightningDataModule):
         self.pin_memory = pin_memory
         self.cache_dir = cache_dir
         self.cache_bytes = cache_bytes
+        self.train_start_date = train_start_date
+        self.train_end_date = train_end_date
+        self.val_start_date = val_start_date
+        self.val_end_date = val_end_date
 
     def create_dataset(
-        self, constellation_tile_paths: List[List[TilePath]], sampler: str = "random"
+        self,
+        constellation_tile_paths: List[List[TilePath]],
+        start_date: str,
+        end_date: str,
     ):
 
         ds = TileDataset(
@@ -92,14 +103,22 @@ class TileDataModule(LightningDataModule):
             bands=self.bands,
             cache_dir=self.cache_dir,
             cache_bytes=self.cache_bytes,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         return ds
 
     def setup(self, stage=None):
         """This method is called N times (N being the number of GPUS)"""
-        self.train_dataset = self.create_dataset(self.train_constellation_tile_paths)
-        self.val_dataset = self.create_dataset(self.val_constellation_tile_paths)
+        self.train_dataset = self.create_dataset(
+            self.train_constellation_tile_paths,
+            self.train_start_date,
+            self.train_end_date,
+        )
+        self.val_dataset = self.create_dataset(
+            self.val_constellation_tile_paths, self.val_start_date, self.val_end_date
+        )
         if self.num_workers == 0:
             self.train_dataset.per_worker_init()
             self.val_dataset.per_worker_init()
