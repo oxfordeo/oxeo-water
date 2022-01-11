@@ -10,6 +10,10 @@ val_constellation_tile_ids:
   landsat-5: [43_P_10000_65_137]
   landsat-7: [43_P_10000_65_137]
   landsat-8: [43_P_10000_65_137]
+train_start_date: "0001-01-01"
+train_end_date: "9999-01-01"
+val_start_date: "0001-01-01"
+val_end_date: "9999-01-01"
 bands: [nir, red, green, blue, swir1, swir2]
 target_size: 1000
 chip_size: 256

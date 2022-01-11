@@ -9,7 +9,6 @@ from skimage.util.shape import view_as_blocks
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 
-from oxeo.water.datamodules.transforms import MinMaxNormalize
 from oxeo.water.models import Predictor
 from oxeo.water.models.utils import resize_sample
 
@@ -47,7 +46,6 @@ class Segmentation2D(LightningModule):
         self.features_start = features_start
         self.bilinear = bilinear
         self.lr = lr
-        self.preprocess = MinMaxNormalize()
         self.criterion = CrossEntropyLoss()
         self.net = UNet(
             num_classes=num_classes,
@@ -60,27 +58,25 @@ class Segmentation2D(LightningModule):
     def forward(self, x):
         if len(x.shape) == 5:  # (B, C, T, H, W)
             x = torch.median(x, 2)[0]
-        x = self.preprocess(x)
         return self.net(x)
 
-    def training_step(self, batch, batch_nb):
+    def shared_step(self, batch):
         img = batch["image"].float()
         label = batch["label"]  # (B, 1, H, W)
 
         pred = self(img)
         loss = self.criterion(pred, label)
+        return loss
+
+    def training_step(self, batch, batch_nb):
+        loss = self.shared_step(batch)
 
         self.log("train/loss", loss, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        img = batch["image"].float()
-        label = batch["label"]
-
-        pred = self(img)
-
-        loss = self.criterion(pred, label)
+        loss = self.shared_step(batch)
 
         self.log("val/loss", loss, prog_bar=True)
 
@@ -189,7 +185,6 @@ class Segmentation2DPredictor(Predictor):
         preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
         preds = resize_sample(torch.as_tensor(preds), original_shape[-1])
         return preds.numpy()
-
 
 
 def reconstruct_from_patches(
