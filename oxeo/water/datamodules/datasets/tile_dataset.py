@@ -7,6 +7,7 @@ from fsspec import asyn
 from joblib import Memory
 from loguru import logger
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from oxeo.satools.io import strdates_to_datetime
 from oxeo.water.models.utils import TilePath, load_tile, resize_sample
@@ -60,6 +61,7 @@ class TileDataset(Dataset):
             )
             self.load_tile_and_resize = mem.cache(self.load_tile_and_resize)
 
+        logger.info("Loading all dates for all tiles.")
         self.tile_dates = {
             tile_path: [
                 d
@@ -68,7 +70,7 @@ class TileDataset(Dataset):
                 )
                 if (d >= self.start_date) and (d <= self.end_date)
             ]
-            for tile_path in self.tile_paths
+            for tile_path in tqdm(self.tile_paths)
         }
 
         self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
