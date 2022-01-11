@@ -17,17 +17,19 @@ class ConstellationNormalize:
         self,
         band_mean: Dict[str, Dict[str, List]] = None,
         band_std: Dict[str, Dict[str, List]] = None,
+        bands: List[str] = None,
     ):
         self.band_mean = band_mean
         self.band_std = band_std
+        self.bands = bands
 
     def __call__(self, sample):
         constellation_mean = self.band_mean[sample["constellation"]]
+        constellation_mean = [constellation_mean[x] for x in constellation_mean.keys()]
         constellation_std = self.band_std[sample["constellation"]]
+        constellation_std = [constellation_std[x] for x in constellation_std.keys()]
         img = sample["image"]
-        img = nn.functional.normalize(
-            img, constellation_mean.values(), constellation_std.values()
-        )
+        img = nn.functional.normalize(img, constellation_mean, constellation_std)
         sample["image"] = img
         return sample
 

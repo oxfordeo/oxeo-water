@@ -5,11 +5,15 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
+from oxeo.water.datamodules.constants import (
+    CONSTELLATION_BAND_MEAN,
+    CONSTELLATION_BAND_STD,
+)
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 from oxeo.water.models.utils import TilePath, tile_from_id
 
-from .transforms import MasksToLabel
+from .transforms import ConstellationNormalize, MasksToLabel
 from .utils import notnone_collate_fn
 
 
@@ -46,7 +50,14 @@ class TileDataModule(LightningDataModule):
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
-        self.transforms = Compose([MasksToLabel(keys=["pekel", "cloud_mask"])])
+        self.transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
+                ),
+                MasksToLabel(keys=["pekel", "cloud_mask"]),
+            ]
+        )
         self.train_constellation_tile_paths = [
             TilePath(tile_from_id(tile_id), k)
             for k, v in train_constellation_tile_ids.items()
