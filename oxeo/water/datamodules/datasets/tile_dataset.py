@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Callable, Iterable, List, Optional
 
 import gcsfs
@@ -25,13 +26,21 @@ class TileDataset(Dataset):
         bands: Iterable[str] = None,
         cache_dir: str = None,
         cache_bytes: int = None,
+        start_date: str = None,
+        end_date: str = None,
     ):
-        """Pytorch Dataset to load data from tiles paths
-
+        """Tile dataset
 
         Args:
-            tile_paths (List[TilePath]): a list of Tile paths to load data from
-            transform (Optional[Callable], optional): Transformations to apply to each sample. Defaults to None.
+            tile_paths (List[TilePath]): The list of TilePaths to be included in the dataset
+            transform (Optional[Callable], optional): Transforms to apply to samples. Defaults to None.
+            masks (Iterable[str], optional): Masks to load in the sample (ex: (pekel,cloud_mask)). Defaults to ().
+            target_size (int, optional): The target size of the sample. Samples will be rescaled to target. Defaults to None.
+            bands (Iterable[str], optional): Bands to load. Defaults to None.
+            cache_dir (str, optional): A cache dir in local disk to store load_tile function. Defaults to None.
+            cache_bytes (int, optional): How many bytes to use as cache in local disk. Defaults to None.
+            start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to None.
+            end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to None.
         """
         super().__init__()
 
@@ -41,6 +50,8 @@ class TileDataset(Dataset):
         self.fs_mapper = None
         self.target_size = target_size
         self.bands = tuple(bands)
+        self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
+        self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
         if cache_dir is not None:
             logger.info(f"Using cache_dir {cache_dir}")
@@ -50,9 +61,13 @@ class TileDataset(Dataset):
             self.load_tile_and_resize = mem.cache(self.load_tile_and_resizeload_tile)
 
         self.tile_dates = {
-            tile_path: strdates_to_datetime(
-                zarr.open_array(tile_path.timestamps_path)[:]
-            )
+            tile_path: [
+                d
+                for d in strdates_to_datetime(
+                    zarr.open_array(tile_path.timestamps_path)[:]
+                )
+                if (d >= self.start_date) and (d <= self.end_date)
+            ]
             for tile_path in self.tile_paths
         }
 
