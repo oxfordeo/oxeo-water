@@ -202,7 +202,7 @@ def resize_sample(
     Returns:
         torch.Tensor: the resampled tensor or dict of tensors
     """
-    logger.info(f"Resizing sample to {target_size}")
+    logger.debug(f"Resizing sample to {target_size}")
     if target_size is not None:
         if isinstance(sample, dict):
             resized_sample = {}

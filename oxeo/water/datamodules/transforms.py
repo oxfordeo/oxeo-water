@@ -2,6 +2,7 @@ from typing import Dict, List
 
 import kornia
 import torch
+import torchvision.transforms.functional as F
 from torch import Tensor, nn
 
 
@@ -29,7 +30,7 @@ class ConstellationNormalize:
         constellation_std = self.band_std[sample["constellation"]]
         constellation_std = [constellation_std[x] for x in constellation_std.keys()]
         img = sample["image"]
-        img = nn.functional.normalize(img, constellation_mean, constellation_std)
+        img = F.normalize(img.float(), constellation_mean, constellation_std)
         sample["image"] = img
         return sample
 

@@ -58,7 +58,7 @@ class TileDataset(Dataset):
             mem = Memory(
                 cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
             )
-            self.load_tile_and_resize = mem.cache(self.load_tile_and_resizeload_tile)
+            self.load_tile_and_resize = mem.cache(self.load_tile_and_resize)
 
         self.tile_dates = {
             tile_path: [
@@ -86,15 +86,16 @@ class TileDataset(Dataset):
             bands=self.bands,
         )
         sample = resize_sample(sample, self.target_size)
+        return sample
 
     def __getitem__(self, index):
         tile_path, timestamp, i, j, chip_size = index
-
         timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
         tile_sample = self.load_tile_and_resize(tile_path, timestamp_index)
 
         chip_sample = {}
+
         for key in tile_sample.keys():
             chip_sample[key] = tile_sample[key][
                 ..., i : i + chip_size, j : j + chip_size

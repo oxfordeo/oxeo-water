@@ -58,10 +58,9 @@ class Segmentation2D(LightningModule):
     def forward(self, x):
         if len(x.shape) == 5:  # (B, C, T, H, W)
             x = torch.median(x, 2)[0]
-        x = self.preprocess(x)
         return self.net(x)
 
-    def shared_step(self, batch, batch_nb):
+    def shared_step(self, batch):
         img = batch["image"].float()
         label = batch["label"]  # (B, 1, H, W)
 
@@ -70,14 +69,14 @@ class Segmentation2D(LightningModule):
         return loss
 
     def training_step(self, batch, batch_nb):
-        loss = self.shared_step(self, batch)
+        loss = self.shared_step(batch)
 
         self.log("train/loss", loss, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.shared_step(self, batch)
+        loss = self.shared_step(batch)
 
         self.log("val/loss", loss, prog_bar=True)
 
