@@ -530,7 +530,7 @@ datamodule:
   chip_size: 100
   revisits_per_epoch: 1024
   samples_per_revisit: 256
-  batch_size: 128
+  batch_size: 64
   num_workers: 6
   pin_memory: False
   cache_dir: "../../cache"

@@ -1,6 +1,7 @@
 from typing import Dict, List
 
 import kornia
+import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from torch import Tensor, nn
@@ -66,8 +67,8 @@ class FilterZeros:
     def __call__(self, sample):
         res = False
         for key in self.keys:
-            arr = sample[key]
-            non_zero_percentage = torch.count_nonzero(arr) / arr.nelement()
+            arr = sample[key].numpy()
+            non_zero_percentage = np.count_nonzero(arr) / arr.size
             res = res | (non_zero_percentage >= (1 - self.percentage))
             if res:
                 break
