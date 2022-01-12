@@ -527,8 +527,8 @@ datamodule:
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
   chip_size: 250
-  revisits_per_epoch: 100
-  samples_per_revisit: 512
+  revisits_per_epoch: 300
+  samples_per_revisit: 1024
   batch_size: 64
   num_workers: 8
   pin_memory: False
@@ -543,3 +543,5 @@ callbacks:
   log_confusion_matrix: None
   watch_model: None
   upload_code_as_artifact: None
+  early_stopping:
+    patience: 10
