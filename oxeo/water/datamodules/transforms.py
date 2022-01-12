@@ -25,6 +25,8 @@ class ConstellationNormalize:
         self.bands = bands
 
     def __call__(self, sample):
+        if sample is None:
+            return sample
         constellation_mean = self.band_mean[sample["constellation"]]
         constellation_mean = [constellation_mean[x] for x in constellation_mean.keys()]
         constellation_std = self.band_std[sample["constellation"]]
@@ -44,6 +46,8 @@ class MasksToLabel:
         self.keys = keys
 
     def __call__(self, sample):
+        if sample is None:
+            return sample
         label = sample[self.keys[0]]
         for i, key in enumerate(self.keys[1:]):
             label[sample[key] == 1] = i + 2

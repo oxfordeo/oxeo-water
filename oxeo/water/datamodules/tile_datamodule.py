@@ -56,12 +56,12 @@ class TileDataModule(LightningDataModule):
         self.save_hyperparameters(logger=False)
         self.transforms = Compose(
             [
-                ConstellationNormalize(
-                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
-                ),
                 FilterZeros(
                     keys=["pekel", "cloud_mask"], percentage=0.95
                 ),  # at least 5% of cloud/water
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
+                ),
                 MasksToLabel(keys=["pekel", "cloud_mask"]),
             ]
         )
