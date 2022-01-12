@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -7,10 +8,16 @@ from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
 from skimage.util.shape import view_as_blocks
 from torch.nn import CrossEntropyLoss
+from torchvision.transforms import Compose
 from tqdm import tqdm
 
+from oxeo.water.datamodules.constants import (
+    CONSTELLATION_BAND_MEAN,
+    CONSTELLATION_BAND_STD,
+)
+from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models import Predictor
-from oxeo.water.models.utils import resize_sample
+from oxeo.water.models.utils import load_tile, resize_sample
 
 
 class Segmentation2D(LightningModule):
@@ -127,6 +134,7 @@ class Segmentation2DPredictor(Predictor):
         num_classes: int = 3,
         chip_size: int = 250,
         fs=None,
+        bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
     ):
         self.model = Segmentation2D.load_from_checkpoint(
             fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
@@ -135,12 +143,33 @@ class Segmentation2DPredictor(Predictor):
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.model.eval()
+        self.bands = bands
+        self.transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, self.bands
+                ),
+            ]
+        )
 
-    def predict(self, sample, target_size=None):
+    def predict(self, fs_mapper, tile_path, revisit, bands, target_size=None):
+
+        sample = load_tile(
+            fs_mapper=fs_mapper,
+            tile_path=tile_path,
+            masks=(),
+            revisit=revisit,
+            bands=bands,
+        )
         original_shape = sample["image"].shape
+        sample = resize_sample(
+            sample,
+            target_size=target_size,
+        )
 
-        sample = resize_sample(sample, target_size)
+        sample["constellation"] = tile_path.constellation
 
+        sample = self.transforms(sample)
         input = sample["image"].numpy()
         revisits = input.shape[0]
         bands = input.shape[1]

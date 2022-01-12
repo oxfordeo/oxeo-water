@@ -218,3 +218,22 @@ def resize_sample(
         elif isinstance(sample, torch.Tensor):
             resized_sample = resize(sample, target_size, interpolation)
     return resized_sample
+
+
+def load_tile_and_resize(
+    fs_mapper,
+    tile_path: TilePath,
+    masks,
+    revisit: int = None,
+    bands=None,
+    target_size=None,
+):
+    sample = load_tile(
+        fs_mapper,
+        tile_path,
+        masks=masks,
+        revisit=revisit,
+        bands=bands,
+    )
+    sample = resize_sample(sample, target_size)
+    return sample

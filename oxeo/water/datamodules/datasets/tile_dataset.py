@@ -10,28 +10,9 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from oxeo.satools.io import strdates_to_datetime
-from oxeo.water.models.utils import TilePath, load_tile, resize_sample
+from oxeo.water.models.utils import TilePath, load_tile_and_resize
 
 from .utils import np_index
-
-
-def load_tile_and_resize(
-    fs_mapper,
-    tile_path: TilePath,
-    masks,
-    revisit: int = None,
-    bands=None,
-    target_size=None,
-):
-    sample = load_tile(
-        fs_mapper,
-        tile_path,
-        masks=masks,
-        revisit=revisit,
-        bands=bands,
-    )
-    sample = resize_sample(sample, target_size)
-    return sample
 
 
 class TileDataset(Dataset):
