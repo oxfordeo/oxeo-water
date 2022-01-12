@@ -13,7 +13,7 @@ from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 from oxeo.water.models.utils import TilePath, tile_from_id
 
-from .transforms import ConstellationNormalize, MasksToLabel
+from .transforms import ConstellationNormalize, FilterZeros, MasksToLabel
 from .utils import notnone_collate_fn
 
 
@@ -59,6 +59,9 @@ class TileDataModule(LightningDataModule):
                 ConstellationNormalize(
                     CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
                 ),
+                FilterZeros(
+                    keys=["pekel", "cloud_mask"], percentage=0.95
+                ),  # at least 5% of cloud/water
                 MasksToLabel(keys=["pekel", "cloud_mask"]),
             ]
         )

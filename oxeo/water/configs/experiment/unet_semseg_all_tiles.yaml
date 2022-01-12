@@ -28,6 +28,7 @@ trainer:
   # limit_train_batches: 20
   precision: 16
   gpus: -1
+  resume_from_checkpoint: null
 
 model:
   num_classes: 3
@@ -527,8 +528,8 @@ datamodule:
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
   chip_size: 250
-  revisits_per_epoch: 300
-  samples_per_revisit: 1024
+  revisits_per_epoch: 512
+  samples_per_revisit: 48
   batch_size: 64
   num_workers: 8
   pin_memory: False
