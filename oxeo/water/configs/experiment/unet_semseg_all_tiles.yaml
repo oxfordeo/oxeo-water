@@ -19,6 +19,7 @@ defaults:
 name: "unet_semseg_all_tiles"
 
 seed: 12345
+log_level: INFO
 
 trainer:
   min_epochs: 1
@@ -526,8 +527,8 @@ datamodule:
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
   chip_size: 250
-  revisits_per_epoch: 10
-  samples_per_revisit: 4096
+  revisits_per_epoch: 100
+  samples_per_revisit: 512
   batch_size: 64
   num_workers: 8
   pin_memory: False

@@ -15,6 +15,25 @@ from oxeo.water.models.utils import TilePath, load_tile, resize_sample
 from .utils import np_index
 
 
+def load_tile_and_resize(
+    fs_mapper,
+    tile_path: TilePath,
+    masks,
+    revisit: int = None,
+    bands=None,
+    target_size=None,
+):
+    sample = load_tile(
+        fs_mapper,
+        tile_path,
+        masks=masks,
+        revisit=revisit,
+        bands=bands,
+    )
+    sample = resize_sample(sample, target_size)
+    return sample
+
+
 class TileDataset(Dataset):
     """A dataset that reads from zarr tiles."""
 
@@ -59,7 +78,9 @@ class TileDataset(Dataset):
             mem = Memory(
                 cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
             )
-            self.load_tile_and_resize = mem.cache(self.load_tile_and_resize)
+            self.load_tile_and_resize = mem.cache(load_tile_and_resize)
+        else:
+            self.load_tile_and_resize = load_tile_and_resize
 
         logger.info("Loading all dates for all tiles.")
         self.tile_dates = {
@@ -75,26 +96,17 @@ class TileDataset(Dataset):
 
         self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
 
-    def load_tile_and_resize(
-        self,
-        tile_path: TilePath,
-        revisit: int = None,
-    ):
-        sample = load_tile(
-            self.fs_mapper,
-            tile_path,
-            masks=self.masks,
-            revisit=revisit,
-            bands=self.bands,
-        )
-        sample = resize_sample(sample, self.target_size)
-        return sample
-
     def __getitem__(self, index):
         tile_path, timestamp, i, j, chip_size = index
         timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
-
-        tile_sample = self.load_tile_and_resize(tile_path, timestamp_index)
+        tile_sample = self.load_tile_and_resize(
+            self.fs_mapper,
+            tile_path,
+            self.masks,
+            timestamp_index,
+            self.bands,
+            self.target_size,
+        )
 
         chip_sample = {}
 

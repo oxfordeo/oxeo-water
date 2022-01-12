@@ -2,6 +2,7 @@ import random
 from typing import Iterator, Tuple
 
 import attr
+from loguru import logger
 from torch.utils.data import Dataset, Sampler
 
 
@@ -37,13 +38,17 @@ class RandomSampler(Sampler):
             unpacked_tile_dates, k=self.revisits_per_epoch
         )
 
+        logger.debug(f"Tile revisits to use: {tile_revisits_to_use}")
+
         for _ in range(self.length):
             # Choose a random tile_index
             tile_path, timestamp = random.choice(tile_revisits_to_use)
 
             # Choose random i and j
             i, j = random.choices(range(target_size - self.chip_size + 1), k=2)
-
+            logger.debug(
+                f"{tile_path.data_path}, {timestamp}, {i}, {j}, {self.chip_size}"
+            )
             yield tile_path, timestamp, i, j, self.chip_size
 
     def __len__(self) -> int:
