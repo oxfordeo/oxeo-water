@@ -28,7 +28,7 @@ trainer:
   # limit_train_batches: 20
   precision: 16
   gpus: -1
-  ckpt_path: null
+  resume_from_checkpoint: null
 
 model:
   num_classes: 3

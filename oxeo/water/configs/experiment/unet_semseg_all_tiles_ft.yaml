@@ -28,7 +28,7 @@ trainer:
   # limit_train_batches: 20
   precision: 16
   gpus: -1
-  ckpt_path: /home/fran/repos/oxeo-water/oxeo/water/logs/experiments/unet_semseg_all_tiles/runs/2022-01-12/21-21-12/checkpoints/epoch_012.ckpt
+  resume_from_checkpoint: /home/fran/repos/oxeo-water/oxeo/water/logs/experiments/unet_semseg_all_tiles/runs/2022-01-12/21-21-12/checkpoints/epoch_012.ckpt
 
 model:
   num_classes: 3
