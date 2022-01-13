@@ -142,6 +142,11 @@ class Segmentation2DPredictor(Predictor):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.chip_size = chip_size
+        self.use_cuda = torch.cuda.is_available()
+        if self.use_cuda:
+            self.model.eval().cuda()
+        else:
+            self.model.eval()
         self.bands = bands
         self.transforms = Compose(
             [
@@ -166,9 +171,6 @@ class Segmentation2DPredictor(Predictor):
             target_size=target_size,
         )
 
-        sample["constellation"] = tile_path.constellation
-
-        sample = self.transforms(sample)
         input = sample["image"].numpy()
         revisits = input.shape[0]
         bands = input.shape[1]
@@ -186,12 +188,22 @@ class Segmentation2DPredictor(Predictor):
         logger.info(
             f"Starting prediction using batch_size of {self.batch_size} for {revisits} revisits."
         )
+
+        item = {}
         for patch in tqdm(range(0, arr.shape[0], self.batch_size)):
-            input_tensor = torch.as_tensor(arr[patch : patch + self.batch_size]).float()
+            input_tensor = torch.as_tensor(arr[patch : patch + self.batch_size])
+            item["image"] = input_tensor
+            item["constellation"] = tile_path.constellation
+            item = self.transforms(item)
+            input_tensor = item["image"]
+            if self.use_cuda:
+                input_tensor = input_tensor.cuda()
             current_pred = self.model(input_tensor)
             current_pred = torch.softmax(current_pred, dim=1)
             current_pred = torch.argmax(current_pred, 1)
             current_pred = current_pred.data
+            if self.use_cuda:
+                current_pred = current_pred.cpu()
             preds.extend(current_pred.numpy())
 
         preds = np.array(preds)
