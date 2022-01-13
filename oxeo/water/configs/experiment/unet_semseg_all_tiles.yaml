@@ -28,7 +28,7 @@ trainer:
   # limit_train_batches: 20
   precision: 16
   gpus: -1
-  resume_from_checkpoint: null
+  ckpt_path: null
 
 model:
   num_classes: 3
@@ -527,7 +527,7 @@ datamodule:
   val_end_date: "9999-01-01"
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
-  chip_size: 100
+  chip_size: 256
   revisits_per_epoch: 1024
   samples_per_revisit: 256
   batch_size: 64
