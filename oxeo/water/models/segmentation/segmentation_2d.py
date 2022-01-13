@@ -201,7 +201,7 @@ class Segmentation2DPredictor(Predictor):
             current_pred = current_pred.data
             if self.use_cuda:
                 current_pred = current_pred.cpu()
-            preds.extend(current_pred.data.numpy())
+            preds.extend(current_pred.numpy())
 
         preds = np.array(preds)
 
