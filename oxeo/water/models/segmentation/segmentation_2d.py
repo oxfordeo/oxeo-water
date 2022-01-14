@@ -190,15 +190,21 @@ class Segmentation2DPredictor(Predictor):
         )
 
         item = {}
+        tensors = []
         for patch in tqdm(range(0, arr.shape[0], self.batch_size)):
-            input_tensor = torch.as_tensor(arr[patch : patch + self.batch_size])
-            item["image"] = input_tensor
-            item["constellation"] = tile_path.constellation
-            item = self.transforms(item)
-            input_tensor = item["image"]
+            input_tensor = torch.as_tensor(
+                arr[patch : patch + self.batch_size], dtype=torch.int16
+            )
+            for t in input_tensor:
+                item["image"] = t
+                item["constellation"] = tile_path.constellation
+                item = self.transforms(item)
+                tensors.append(item["image"])
+            tensors = torch.stack(tensors)
             if self.use_cuda:
-                input_tensor = input_tensor.cuda()
-            current_pred = self.model(input_tensor)
+                tensors = tensors.cuda()
+            current_pred = self.model(tensors)
+            del tensors
             current_pred = torch.softmax(current_pred, dim=1)
             current_pred = torch.argmax(current_pred, 1)
             current_pred = current_pred.data
