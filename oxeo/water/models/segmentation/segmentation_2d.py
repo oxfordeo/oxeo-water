@@ -190,8 +190,8 @@ class Segmentation2DPredictor(Predictor):
         )
 
         item = {}
-        tensors = []
         for patch in tqdm(range(0, arr.shape[0], self.batch_size)):
+            tensors = []
             input_tensor = torch.as_tensor(
                 arr[patch : patch + self.batch_size], dtype=torch.int16
             )
