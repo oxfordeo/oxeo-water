@@ -207,11 +207,12 @@ class Segmentation2DPredictor(Predictor):
             del tensors
             current_pred = torch.softmax(current_pred, dim=1)
             current_pred = torch.argmax(current_pred, 1)
-            current_pred = current_pred.data
+            current_pred = current_pred.data.type(torch.uint8)
             if self.use_cuda:
                 current_pred = current_pred.cpu()
-            preds.extend(current_pred.numpy())
-
+            current_pred = current_pred.numpy()
+            preds.extend(current_pred)
+            logger.info(f"current_pred type {current_pred.dtype}")
         preds = np.array(preds)
 
         preds = preds.reshape(
