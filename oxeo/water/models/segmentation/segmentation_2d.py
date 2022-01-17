@@ -135,6 +135,7 @@ class Segmentation2DPredictor(Predictor):
         chip_size: int = 250,
         fs=None,
         bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
+        target_size: int = 1000,
     ):
         self.model = Segmentation2D.load_from_checkpoint(
             fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
@@ -155,20 +156,21 @@ class Segmentation2DPredictor(Predictor):
                 ),
             ]
         )
+        self.target_size = target_size
 
-    def predict(self, fs_mapper, tile_path, revisit, bands, target_size=None):
+    def predict(self, fs_mapper, tile_path, revisit):
 
         sample = load_tile(
             fs_mapper=fs_mapper,
             tile_path=tile_path,
             masks=(),
             revisit=revisit,
-            bands=bands,
+            bands=self.bands,
         )
         original_shape = sample["image"].shape
         sample = resize_sample(
             sample,
-            target_size=target_size,
+            target_size=self.target_size,
         )
 
         input = sample["image"].numpy()
