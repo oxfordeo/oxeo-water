@@ -31,7 +31,7 @@ class PekelPredictor(Predictor):
             for i in range(arr.shape[0]):
                 mtl_dict = get_mtl_dict(self.fs, tile_path.metadata_path, i)
                 toa_arrs.append(to_toa(arr[i], mtl_dict, tile_path.constellation))
-        arr = np.array(toa_arrs)
+            arr = np.array(toa_arrs)
 
         preds = []
         for patch in tqdm(range(0, arr.shape[0])):
