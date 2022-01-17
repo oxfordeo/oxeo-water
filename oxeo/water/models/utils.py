@@ -67,6 +67,10 @@ class TilePath:
     def mask_path(self):
         return f"{self.path}/mask"
 
+    @property
+    def metadata_path(self):
+        return f"{self.path}/metadata"
+
 
 @define
 class WaterBody:
@@ -160,20 +164,21 @@ def load_tile(
     fs_mapper,
     tile_path: TilePath,
     masks: Tuple[str, ...] = (),
-    revisit: int = None,
+    revisit: slice = None,
     bands: Tuple[str, ...] = None,
 ) -> torch.Tensor:
-    logger.debug(f"Loading file from {tile_path}")
     if bands is not None:
         band_common_names = get_band_list(tile_path.constellation)
         band_indices = [band_common_names.index(b) for b in bands]
     else:
-        band_indices = slice(None)
+        band_common_names = get_band_list(tile_path.constellation)
+        band_indices = list(range(0, len(band_common_names)))
 
     sample = {}
     arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")
+    print(arr.shape, revisit, band_indices)
     arr = arr.oindex[revisit, band_indices].astype(np.int16)
-
+    print(arr.shape)
     for mask in masks:
         mask_arr = zarr.open_array(
             fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
