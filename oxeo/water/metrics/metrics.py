@@ -47,9 +47,7 @@ def get_segmentation_area(tsm, tiles, geom, label_to_mask):
     data = mask_cube(tsm.data, osm_raster, label_to_mask)
     logger.info(f"Masked data cube with {data.shape=}")
 
-    area = segmentation_area(
-        data, unit="meter", resolution=tsm.resolution, label_to_mask=label_to_mask
-    )
+    area = segmentation_area(data, unit="meter", resolution=tsm.resolution)
     logger.info(f"Calculated 1D area array with {area.shape=}")
 
     df = pd.DataFrame(
@@ -128,7 +126,6 @@ def segmentation_area(
     seg: Union[np.ndarray, xr.DataArray],
     unit: str = "pixel",
     resolution: Optional[int] = 1,
-    label_to_mask: int = 1,
 ) -> Union[np.ndarray, xr.DataArray]:
     """Get the total area of a segmentation (Nx..xHxW)
 
@@ -141,7 +138,7 @@ def segmentation_area(
         float: total area (Nx...)
     """
     assert unit in UNITS, f"unit must be one of {UNITS}"
-    total_area = (seg == label_to_mask).sum(axis=(-2, -1))
+    total_area = (seg > 0).sum(axis=(-2, -1))
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
         total_area *= resolution ** 2
