@@ -87,7 +87,7 @@ def segmentation_area_multiple(
     return pd.concat(dfs, axis=0)
 
 
-def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label_to_mask: int = 1):
+def mask_single(arr: da.Array, i: int, label_to_mask: int = 1):
     lab = arr[i, 0, ...].compute()
     lab = lab.where(lab != label_to_mask, 0)
     lab = lab.astype(bool)
@@ -95,7 +95,10 @@ def mask_single(arr: da.Array, i: int, geom_raster: np.ndarray, label_to_mask: i
     lab = remove_small_holes(lab, area_threshold=50, connectivity=2)
     lab = remove_small_objects(lab, min_size=50, connectivity=2)
     lab = label(lab, background=0, connectivity=2)
+    return lab
 
+
+def overlay_osm(lab: np.ndarray, geom_raster: np.ndarray):
     # Overlay the OSM mask and find the label IDs of all
     # labelled water that it covers
     masked = geom_raster * lab

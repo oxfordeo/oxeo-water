@@ -1,54 +1,17 @@
-from typing import Any
-
-import zarr
-from attr import define
-from joblib import Parallel, delayed
-from satextractor.utils import tqdm_joblib
+import numpy as np
 from tqdm import tqdm
 
 from oxeo.satools.processing import get_mtl_dict, to_toa
 from oxeo.water.models import Predictor
 from oxeo.water.models.pekel import masks, utils
+from oxeo.water.models.utils import load_tile
 
 
-@define
 class PekelPredictor(Predictor):
-    def predict_single_revisit(
-        self,
-        arr: zarr.core.Array,
-        revisit: int,
-        constellation="sentinel-2",
-    ):
-        """Return mask for a BxHxW array
-        Args:
-            arr (zarr.core.Array): the zarr array to make predictions in
+    def __init__(self, fs=None, **kwargs):
+        self.fs = fs
 
-        Returns:
-            [type]: HxW mask
-        """
-        fs = arr.store.fs
-
-        if "landsat" in constellation:
-            mtl_path = "/".join(arr.store.root.split("/")[:-1] + ["metadata"])
-            mtl_dict = get_mtl_dict(fs, mtl_path, revisit)
-            arr = to_toa(arr[revisit], mtl_dict, constellation)
-        else:
-            arr = arr[revisit]
-
-        p_bands = utils.pekel_bands(
-            arr,
-            constellation,
-        )
-        c_masks = masks.combine_masks(p_bands, cloud_mask=False)
-        return c_masks
-
-    def predict(
-        self,
-        arr: Any,
-        constellation="sentinel-2",
-        n_jobs=-1,
-        verbose=0,
-    ):
+    def predict(self, tile_path, revisit):
         """Return masks for a TxBxHxW array
         Args:
             arr (np.ndarray): the array to make predictions in
@@ -56,17 +19,26 @@ class PekelPredictor(Predictor):
         Returns:
             [type]: TxHxW masks
         """
-        with tqdm_joblib(
-            tqdm(
-                desc="parallel predicting masks on revistis.",
-                total=arr.shape[0],
-            ),
-        ):
-            masks = Parallel(n_jobs=n_jobs, verbose=verbose)(
-                [
-                    delayed(self.predict_single_revisit)(arr, revisit, constellation)
-                    for revisit in range(arr.shape[0])
-                ],
-            )
+        arr = load_tile(
+            fs_mapper=self.fs.get_mapper,
+            tile_path=tile_path,
+            masks=(),
+            revisit=revisit,
+        )
+        arr = arr["image"].numpy()
+        if "landsat" in tile_path.constellation:
+            toa_arrs = []
+            for i in range(arr.shape[0]):
+                mtl_dict = get_mtl_dict(self.fs, tile_path.metadata_path, i)
+                toa_arrs.append(to_toa(arr[i], mtl_dict, tile_path.constellation))
+        arr = np.array(toa_arrs)
 
-        return masks
+        preds = []
+        for patch in tqdm(range(0, arr.shape[0])):
+            p_bands = utils.pekel_bands(
+                arr[patch],
+                tile_path.constellation,
+            )
+            c_masks = masks.combine_masks(p_bands, cloud_mask=False)
+            preds.append(c_masks)
+        return np.array(preds)
