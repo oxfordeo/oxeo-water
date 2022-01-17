@@ -99,7 +99,7 @@ def mask_single(arr: da.Array, i: int, label_to_mask: int = 1):
 
 
 def overlay_osm(lab: np.ndarray, geom_raster: np.ndarray):
-    # Overlay the OSM mask and find the label IDs of all
+    # Overlay the OSM mask andn   find the label IDs of all
     # labelled water that it covers
     masked = geom_raster * lab
     keepers = [val for val in np.unique(masked) if val != 0]
@@ -116,7 +116,8 @@ def mask_cube(
     # TODO Probably tere's some clever Dasky stuff to do here
     # Right now it's just a sequential loop
     all_masks = [
-        mask_single(data, i, osm_raster, label_to_mask) for i in range(len(data))
+        overlay_osm(mask_single(data, i, label_to_mask), osm_raster)
+        for i in range(len(data))
     ]
     block = da.stack(all_masks, axis=0)
     # Dropped the 'band' dimension as not needed
