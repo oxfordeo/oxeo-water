@@ -88,8 +88,8 @@ def segmentation_area_multiple(
 
 
 def mask_single(arr: da.Array, i: int, label_to_mask: int = 1):
-    lab = arr[i, 0, ...].compute()
-    lab = lab.where(lab != label_to_mask, 0)
+    lab = arr[i, 0, ...].compute().data
+    lab[lab != label_to_mask] = 0
     lab = lab.astype(bool)
     lab = closing(lab, square(3))
     lab = remove_small_holes(lab, area_threshold=50, connectivity=2)
