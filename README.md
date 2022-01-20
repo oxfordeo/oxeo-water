@@ -55,7 +55,10 @@ And that's all! It will store the results on `Wandb` and automatically train fro
 If you want to continue training an existing model you just have to define the `resume_from_checkpoint` parameter.
 An example can be found in `unet_semseg_all_tiles_ft.yaml`
 
-## Prediction in Prefect
+## Prediction
+### Local
+If you need to run a local prediction you can use the notebook `Unet Predictor` as a starting example.
+### Prefect
 After the training is complete you will need to upload the best checkpoint to the `oxeo/models/` bucket.
 Once it is there you can run prefect passing that chackpoint.
 
@@ -82,3 +85,6 @@ A common prefect config to run the cnn is:
   "water_list": [51318547]
 }
 ```
+
+## Metrics
+There is a notebook called `Baseline Metrics` where you can find the queries to retrieve the timeseries results (pekel and cnn) and plot them together.
