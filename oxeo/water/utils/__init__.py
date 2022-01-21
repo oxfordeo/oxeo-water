@@ -1,1 +1,1 @@
-from .utils import tqdm_joblib  # noqa
+from .utils import plot_imgs_in_row, tqdm_joblib  # noqa

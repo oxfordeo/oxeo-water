@@ -4,6 +4,7 @@ import warnings
 from typing import List, Sequence
 
 import joblib
+import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 import rich.syntax
 import rich.tree
@@ -190,3 +191,18 @@ def finish(
             import wandb
 
             wandb.finish()
+
+
+def plot_imgs_in_row(imgs, labels=("img", "pekel", "cnn"), figsize=(8, 5)):
+    rows = 1
+    cols = len(imgs)
+    fig, ax = plt.subplots(rows, cols, figsize=figsize)
+    # axes are in a two-dimensional array, indexed by [row, col]
+    # fig.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+
+    for i in range(cols):
+        ax[i].set_title(labels[i])
+        img = imgs[i]
+        ax[i].imshow(img, vmin=0.0, vmax=1.0, interpolation=None)
+        ax[i].axis("off")
+    fig
