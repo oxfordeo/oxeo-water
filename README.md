@@ -86,5 +86,9 @@ A common prefect config to run the cnn is:
 }
 ```
 
+## How to see changes in oxeo-water reflected in Prefect
+If you change the code in this repository, it won't be automatically updated. You have to go to `actions` in `oxeo-flows` repository and
+run the `build-images` action..
+
 ## Metrics
 There is a notebook called `Baseline Metrics` where you can find the queries to retrieve the timeseries results (pekel and cnn) and plot them together.
