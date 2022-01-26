@@ -145,11 +145,12 @@ def merge_masks_one_constellation(
     tile_size = get_tile_size([pp.tile for pp in patch_paths])  # in metres
     patch_size = get_patch_size(patch_paths)  # in pixels
     resolution = int(tile_size / patch_size)
+    root_dir = patch_paths[0].root
 
     tile_ids = [
         tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
     ]
-    paths = [f"gs://oxeo-water/prod/{t}" for t in tile_ids]
+    paths = [f"gs://oxeo-water/{root_dir}/{t}" for t in tile_ids]
     c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
     data_arr = constellation_dataarray(c_data, data_path=f"mask/{mask}")
 
