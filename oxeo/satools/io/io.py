@@ -12,7 +12,7 @@ import xarray as xr
 
 def strdates_to_datetime(dates: List[str]) -> np.ndarray:
     return np.array(
-        [datetime.strptime(x[:10], "%Y-%m-%d") for x in sorted(list(dates))]
+        [datetime.fromisoformat(x) for x in sorted(list(dates))]
     )
 
 
