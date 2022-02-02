@@ -3,7 +3,6 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from loguru import logger
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
 from skimage.util.shape import view_as_blocks
@@ -18,6 +17,7 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models import Predictor
 from oxeo.water.models.utils import load_tile, resize_sample
+from oxeo.utils.logging import logger
 
 
 class Segmentation2D(LightningModule):

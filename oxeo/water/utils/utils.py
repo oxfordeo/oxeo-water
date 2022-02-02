@@ -11,6 +11,8 @@ import rich.tree
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities import rank_zero_only
 
+from oxeo.utils.logging import get_logger
+
 
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
@@ -33,10 +35,10 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-def get_logger(name=__name__) -> logging.Logger:
+def get_multi_gpu_logger() -> logging.Logger:
     """Initializes multi-GPU-friendly python command line logger."""
 
-    logger = logging.getLogger(name)
+    logger = get_logger()
 
     # this ensures all logging levels get marked with the rank zero decorator
     # otherwise logs would get multiplied for each GPU process in multi-GPU setup

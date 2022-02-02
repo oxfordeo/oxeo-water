@@ -6,10 +6,10 @@ from typing import Callable, Dict, List, Optional, Tuple
 import gcsfs
 import torch
 from fsspec import asyn
-from loguru import logger
 from torch.utils.data import IterableDataset
 
 from oxeo.satools.io import ConstellationData, load_virtual_datasets
+from oxeo.utils.logging import logger
 
 
 class VirtualDataset(IterableDataset):

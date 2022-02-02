@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
@@ -15,13 +14,7 @@ from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
-
-
-logger = logging.getLogger("water")
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-logger.addHandler(ch)
+from oxeo.utils.logging import logger
 
 
 def get_band_list(constellation: str) -> List[str]:

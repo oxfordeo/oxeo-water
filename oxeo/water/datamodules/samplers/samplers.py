@@ -2,8 +2,9 @@ import random
 from typing import Iterator, Tuple
 
 import attr
-from loguru import logger
 from torch.utils.data import Dataset, Sampler
+
+from oxeo.utils.logging import logger
 
 
 @attr.s

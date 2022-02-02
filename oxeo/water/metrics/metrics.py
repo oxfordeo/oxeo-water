@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -32,12 +31,7 @@ from oxeo.water.models.utils import (
     tile_from_id,
 )
 from oxeo.water.utils import tqdm_joblib
-
-logger = logging.getLogger("water")
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-logger.addHandler(ch)
+from oxeo.utils.logging import logger
 
 
 UNITS = ["pixel", "meter"]

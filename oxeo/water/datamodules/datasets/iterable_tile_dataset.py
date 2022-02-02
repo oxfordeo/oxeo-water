@@ -7,11 +7,11 @@ import numpy as np
 import zarr
 from fsspec import asyn
 from joblib import Memory
-from loguru import logger
 from torch.utils.data import IterableDataset, get_worker_info
 
 from oxeo.satools.io import strdates_to_datetime
 from oxeo.water.models.utils import TilePath, load_tile
+from oxeo.utils.logging import logger
 
 from .utils import np_index
 

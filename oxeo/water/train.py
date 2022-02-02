@@ -14,7 +14,7 @@ from pytorch_lightning.loggers import LightningLoggerBase
 
 from oxeo.water.utils import utils
 
-log = utils.get_logger(__name__)
+log = utils.get_multi_gpu_logger()
 
 
 def train(config: DictConfig) -> Optional[float]:
