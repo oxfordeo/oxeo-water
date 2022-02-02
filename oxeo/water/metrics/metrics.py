@@ -1,3 +1,4 @@
+import sys
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -32,6 +33,8 @@ from oxeo.water.models.utils import (
     tile_from_id,
 )
 from oxeo.water.utils import tqdm_joblib
+
+logger.add(sys.stdout)
 
 UNITS = ["pixel", "meter"]
 

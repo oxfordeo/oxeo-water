@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
@@ -15,6 +16,8 @@ from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
+
+logger.add(sys.stdout)
 
 
 def get_band_list(constellation: str) -> List[str]:
@@ -129,7 +132,9 @@ def merge_masks_all_constellations(
             tsm = merge_masks_one_constellation(waterbody, constellation, mask)
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
-            logger.info(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
+            logger.info(
+                f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}"
+            )
             logger.info("Continuing with other constellations")
     return mask_list
 
