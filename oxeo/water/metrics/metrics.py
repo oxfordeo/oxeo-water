@@ -1,4 +1,4 @@
-import sys
+import logging
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -9,7 +9,6 @@ import pandas as pd
 import xarray as xr
 import zarr
 from joblib import Parallel, delayed
-from loguru import logger
 from pyproj import CRS
 from rasterio import features, transform
 from satextractor.models import Tile
@@ -34,7 +33,12 @@ from oxeo.water.models.utils import (
 )
 from oxeo.water.utils import tqdm_joblib
 
-logger.add(sys.stdout)
+logger = logging.getLogger("water")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+logger.addHandler(ch)
+
 
 UNITS = ["pixel", "meter"]
 

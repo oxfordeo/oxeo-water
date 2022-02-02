@@ -1,4 +1,4 @@
-import sys
+import logging
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
@@ -7,7 +7,6 @@ import torch
 import xarray as xr
 import zarr
 from attr import define
-from loguru import logger
 from pystac.extensions.eo import Band
 from satextractor.models import Tile
 from satextractor.models.constellation_info import BAND_INFO
@@ -17,7 +16,12 @@ from zarr.core import ArrayNotFoundError
 
 from oxeo.satools.io import ConstellationData, constellation_dataarray
 
-logger.add(sys.stdout)
+
+logger = logging.getLogger("water")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+logger.addHandler(ch)
 
 
 def get_band_list(constellation: str) -> List[str]:
