@@ -93,7 +93,7 @@ def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
     sizes = []
     for patch in patch_paths:
         arr_path = f"gs://{patch.path}/data"
-        print(f"Loading to check size {arr_path=}")
+        logger.info(f"Loading to check size {arr_path=}")
         z = zarr.open(arr_path, "r")
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"
@@ -123,11 +123,14 @@ def merge_masks_all_constellations(
     mask_list = []
     for constellation in constellations:
         try:
+            logger.info(
+                f"merge_masks_all_constellations; {constellation=}; {waterbody.area_id=}: merging"
+            )
             tsm = merge_masks_one_constellation(waterbody, constellation, mask)
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
-            print(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
-            print("Continuing with other constellations")
+            logger.info(f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}")
+            logger.info("Continuing with other constellations")
     return mask_list
 
 
@@ -142,6 +145,9 @@ def merge_masks_one_constellation(
     if len(patch_paths) == 0:
         raise ValueError(f"Constellation '{constellation}' not found in waterbody")
 
+    logger.info(
+        f"merge_masks_one_constellation; {constellation=}; {waterbody.area_id}: get details"
+    )
     tile_size = get_tile_size([pp.tile for pp in patch_paths])  # in metres
     patch_size = get_patch_size(patch_paths)  # in pixels
     resolution = int(tile_size / patch_size)
@@ -152,6 +158,10 @@ def merge_masks_one_constellation(
     ]
     paths = [f"gs://oxeo-water/{root_dir}/{t}" for t in tile_ids]
     c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
+
+    logger.info(
+        f"merge_masks_one_constellation; {constellation=}; {waterbody.area_id}: create dataarray"
+    )
     data_arr = constellation_dataarray(c_data, data_path=f"mask/{mask}")
 
     return TimeseriesMask(
@@ -177,9 +187,9 @@ def load_tile(
 
     sample = {}
     arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")
-    print(arr.shape, revisit, band_indices)
+    logger.info(f"{arr.shape=}; {revisit=}, {band_indices=}")
     arr = arr.oindex[revisit, band_indices].astype(np.int16)
-    print(arr.shape)
+    logger.info(f"{arr.shape=}")
     for mask in masks:
         mask_arr = zarr.open_array(
             fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"

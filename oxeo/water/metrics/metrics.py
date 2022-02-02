@@ -71,6 +71,8 @@ def segmentation_area_multiple(
     geom = waterbody.geometry
     tiles = [tp.tile for tp in waterbody.paths]
 
+    logger.info(f"segmentation_area_multiple; {waterbody.area_id}: calculate metrics")
+
     with tqdm_joblib(
         tqdm(
             desc="parallel calculating metrics for constellations.",
@@ -88,6 +90,7 @@ def segmentation_area_multiple(
 
 
 def mask_single(arr: da.Array, i: int, label_to_mask: int = 1):
+    logger.info("Running mask_single")
     lab = arr[i, 0, ...].compute().data
     lab[lab != label_to_mask] = 0
     lab = lab.astype(bool)
@@ -115,6 +118,7 @@ def mask_cube(
 ) -> xr.DataArray:
     # TODO Probably tere's some clever Dasky stuff to do here
     # Right now it's just a sequential loop
+    logger.info(f"Running mask_cube on {data.shape=}")
     all_masks = [
         overlay_osm(mask_single(data, i, label_to_mask), osm_raster)
         for i in range(len(data))
@@ -123,6 +127,7 @@ def mask_cube(
     # Dropped the 'band' dimension as not needed
     # Might be better to keep it for consistency with other stuff?
     osm_masked = xr.DataArray(block, dims=["revisits", "height", "width"])
+    logger.info(f"Finished mask_cube on {data.shape=}")
     return osm_masked
 
 
@@ -141,11 +146,13 @@ def segmentation_area(
     Returns:
         float: total area (Nx...)
     """
+
+    logger.info("Calculate area for segment")
     assert unit in UNITS, f"unit must be one of {UNITS}"
     total_area = (seg > 0).sum(axis=(-2, -1))
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
-        total_area *= resolution ** 2
+        total_area *= resolution**2
 
     return total_area
 
