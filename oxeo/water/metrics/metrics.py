@@ -123,11 +123,13 @@ def mask_cube(
         overlay_osm(mask_single(data, i, label_to_mask), osm_raster)
         for i in range(len(data))
     ]
-    block = da.stack(all_masks, axis=0)
+    logger.info(f"Done masking and overlaying OSM, {len(all_masks)=}")
+    block = da.stack(all_masks, axis=0).compute()
+    logger.info(f"Converted with da.stack, {type(block)=}")
     # Dropped the 'band' dimension as not needed
     # Might be better to keep it for consistency with other stuff?
     osm_masked = xr.DataArray(block, dims=["revisits", "height", "width"])
-    logger.info(f"Finished mask_cube on {data.shape=}")
+    logger.info(f"Finished mask_cube on {data.shape=}, with output {type(osm_masked)=}")
     return osm_masked
 
 
