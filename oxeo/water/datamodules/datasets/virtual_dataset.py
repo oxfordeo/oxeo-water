@@ -5,6 +5,7 @@ from fsspec import asyn
 from torch.utils.data import Dataset
 
 from oxeo.satools.io import ConstellationData, load_virtual_datasets
+from oxeo.utils.logging import logger
 
 
 class VirtualDataset(Dataset):
@@ -83,7 +84,7 @@ class VirtualDataset(Dataset):
                         j,
                     )
 
-                    print(label)
+                    logger.debug(label)
 
             sample["label"] = label
 

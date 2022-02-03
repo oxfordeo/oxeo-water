@@ -9,11 +9,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from oxeo.utils.logging import logger
+
 
 def strdates_to_datetime(dates: List[str]) -> np.ndarray:
-    return np.array(
-        [datetime.fromisoformat(x) for x in sorted(list(dates))]
-    )
+    return np.array([datetime.fromisoformat(x) for x in sorted(list(dates))])
 
 
 def id_f(x):
@@ -61,7 +61,7 @@ def constellation_dataarray(
         if len(da_arr.shape) == 3:  # it has no bands
             # add band channel (can be labels)
             da_arr = da.stack([da_arr], axis=1)
-        print(f"Inserted tile at {x=}, {y=}")
+        logger.debug(f"Inserted tile at {x=}, {y=}")
         arrays[y][x] = da_arr
         if example is None:
             example = da_arr
@@ -69,7 +69,7 @@ def constellation_dataarray(
     for y in sorted(set(y_coords), reverse=True):
         for x in sorted(set(x_coords)):
             if y not in arrays.keys() or x not in arrays[y].keys():
-                print(f"Created NAN tile at {x=}, {y=}")
+                logger.debug(f"Created NAN tile at {x=}, {y=}")
                 arrays[y][x] = da.full(
                     example.shape,
                     fill_value=np.nan,

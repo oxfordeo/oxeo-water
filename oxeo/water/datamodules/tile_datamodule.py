@@ -12,6 +12,7 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 from oxeo.water.models.utils import TilePath, tile_from_id
+from oxeo.utils.logging import logger
 
 from .transforms import ConstellationNormalize, FilterZeros, MasksToLabel
 from .utils import notnone_collate_fn
@@ -25,7 +26,7 @@ def worker_init_fn(worker_id):
     # get_worker_info() returns information specific to each worker process.
     worker_info = torch.utils.data.get_worker_info()
     if worker_info is None:
-        print("worker_info is None!")
+        logger.debug("worker_info is None!")
     else:
         dataset_obj = worker_info.dataset  # The Dataset copy in this worker process.
         dataset_obj.per_worker_init()

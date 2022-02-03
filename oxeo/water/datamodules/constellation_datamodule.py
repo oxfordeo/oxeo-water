@@ -5,6 +5,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
 from oxeo.satools.io import ConstellationData
+from oxeo.utils.logging import logger
 
 from .datasets.virtual_dataset import VirtualDataset
 
@@ -17,7 +18,7 @@ def worker_init_fn(worker_id):
     # get_worker_info() returns information specific to each worker process.
     worker_info = torch.utils.data.get_worker_info()
     if worker_info is None:
-        print("worker_info is None!")
+        logger.debug("worker_info is None!")
     else:
         dataset_obj = worker_info.dataset  # The Dataset copy in this worker process.
         dataset_obj.per_worker_init(worker_id=worker_info.id)
