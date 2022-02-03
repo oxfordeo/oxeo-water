@@ -91,7 +91,6 @@ def segmentation_area_multiple(
 
 
 def mask_single(arr: da.Array, i: int, label_to_mask: int = 1):
-    logger.info("Running mask_single")
     lab = arr[i, 0, ...].compute().data
     lab[lab != label_to_mask] = 0
     lab = lab.astype(bool)

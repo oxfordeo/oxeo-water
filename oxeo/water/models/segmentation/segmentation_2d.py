@@ -216,7 +216,7 @@ class Segmentation2DPredictor(Predictor):
                 current_pred = current_pred.cpu()
             current_pred = current_pred.numpy()
             preds.extend(current_pred)
-            logger.info(f"current_pred type {current_pred.dtype}")
+            logger.debug(f"current_pred type {current_pred.dtype}")
         preds = np.array(preds)
 
         preds = preds.reshape(
