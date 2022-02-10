@@ -138,6 +138,7 @@ class Segmentation2DPredictor(Predictor):
         target_size: int = 1000,
         **kwargs,
     ):
+        logger.info("Getting model")
         self.model = Segmentation2D.load_from_checkpoint(
             fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
         )
@@ -145,11 +146,13 @@ class Segmentation2DPredictor(Predictor):
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.use_cuda = torch.cuda.is_available()
+        logger.info("Evalling model")
         if self.use_cuda:
             self.model.eval().cuda()
         else:
             self.model.eval()
         self.bands = bands
+        logger.info("Getting transforms")
         self.transforms = Compose(
             [
                 ConstellationNormalize(
