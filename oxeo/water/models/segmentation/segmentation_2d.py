@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from typing import Tuple
 
-import psutil
 import numpy as np
 import torch
 from pl_bolts.models.vision.unet import UNet
@@ -139,7 +138,6 @@ class Segmentation2DPredictor(Predictor):
         target_size: int = 1000,
         **kwargs,
     ):
-        logger.info("Getting model")
         self.model = Segmentation2D.load_from_checkpoint(
             fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
         )
@@ -147,13 +145,11 @@ class Segmentation2DPredictor(Predictor):
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.use_cuda = torch.cuda.is_available()
-        logger.info("Evalling model")
         if self.use_cuda:
             self.model.eval().cuda()
         else:
             self.model.eval()
         self.bands = bands
-        logger.info("Getting transforms")
         self.transforms = Compose(
             [
                 ConstellationNormalize(
@@ -199,47 +195,34 @@ class Segmentation2DPredictor(Predictor):
 
         item = {}
         for i, patch in enumerate(tqdm(range(0, arr.shape[0], self.batch_size))):
-            logger.warning(f"starting {i=}, {psutil.virtual_memory()=}")
+            logger.debug(f"Pred loop {i} of {arr.shape[0]} with {self.batch_size=}")
             tensors = []
             input_tensor = torch.as_tensor(
                 arr[patch : patch + self.batch_size], dtype=torch.int16
             )
-            logger.warning(f"Append input tensors {psutil.virtual_memory()=}")
             for t in input_tensor:
                 item["image"] = t
                 item["constellation"] = tile_path.constellation
                 item = self.transforms(item)
                 tensors.append(item["image"])
-            logger.warning(f"stack tensors {psutil.virtual_memory()=}")
             tensors = torch.stack(tensors)
             if self.use_cuda:
-                logger.warning(f"to cuda {psutil.virtual_memory()=}")
                 tensors = tensors.cuda()
-            logger.warning(f"make pred {psutil.virtual_memory()=}")
             current_pred = self.model(tensors)
             del tensors
-            logger.warning(f"softmax argmax pred {psutil.virtual_memory()=}")
             current_pred = torch.softmax(current_pred, dim=1)
             current_pred = torch.argmax(current_pred, 1)
-            logger.warning(f"change dtype {psutil.virtual_memory()=}")
             current_pred = current_pred.data.type(torch.uint8)
             if self.use_cuda:
-                logger.warning(f"back to cpu {psutil.virtual_memory()=}")
                 current_pred = current_pred.cpu()
-            logger.warning(f"back to numpy {psutil.virtual_memory()=}")
             current_pred = current_pred.numpy()
-            logger.warning(f"extend {psutil.virtual_memory()=}")
             preds.extend(current_pred)
-            logger.debug(f"current_pred type {current_pred.dtype}")
-        logger.warning(f"array of all preds {psutil.virtual_memory()=}")
         preds = np.array(preds)
 
-        logger.warning(f"reshape {psutil.virtual_memory()=}")
         preds = preds.reshape(
             (block_shape[0], block_shape[1], self.chip_size, self.chip_size)
         )
 
-        logger.warning(f"reshape {psutil.virtual_memory()=}")
         preds = preds.reshape(
             (
                 block_shape[0],
@@ -249,9 +232,7 @@ class Segmentation2DPredictor(Predictor):
             ),
             order="F",
         )
-        logger.warning(f"reconstruct {psutil.virtual_memory()=}")
         preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
-        logger.warning(f"resize {psutil.virtual_memory()=}")
         preds = resize_sample(torch.as_tensor(preds), original_shape[-1])
         return preds.numpy()
 
