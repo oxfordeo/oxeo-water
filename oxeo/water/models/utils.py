@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
+import geopandas as gpd
 import numpy as np
 import torch
 import xarray as xr
@@ -9,6 +10,7 @@ from attr import define
 from pystac.extensions.eo import Band
 from satextractor.models import Tile
 from satextractor.models.constellation_info import BAND_INFO
+from satextractor.tiler import split_region_in_utm_tiles
 from shapely.geometry import MultiPolygon, Polygon
 from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
@@ -255,3 +257,53 @@ def load_tile_and_resize(
     )
     sample = resize_sample(sample, target_size)
     return sample
+
+
+def get_tiles(
+    geom: Union[Polygon, MultiPolygon, gpd.GeoSeries, gpd.GeoDataFrame]
+) -> list[Tile]:
+    try:
+        geom = geom.unary_union
+    except AttributeError:
+        pass
+    return split_region_in_utm_tiles(region=geom, bbox_size=10000)
+
+
+def make_paths(tiles, constellations, root_dir):
+    return [
+        TilePath(tile=tile, constellation=cons, root=root_dir)
+        for tile in tiles
+        for cons in constellations
+    ]
+
+
+def get_waterbodies(
+    gdf: gpd.GeoDataFrame,
+    bucket: str,
+    constellations: list[str],
+    root_dir: str = "prod",
+) -> list[WaterBody]:
+    waterbodies = []
+    for water in gdf.to_dict(orient="records"):
+        tiles = get_tiles(water["geometry"])
+        waterbodies.append(
+            WaterBody(
+                **water,
+                paths=make_paths(bucket, tiles, constellations, root_dir=root_dir),
+            )
+        )
+    return waterbodies
+
+
+def parse_water_list(
+    water_list: Union[str, int, list],
+    postgis_password: str,
+) -> tuple[int, ...]:
+    if isinstance(water_list, str):
+        water_list = water_list.split(",")
+    if isinstance(water_list, int):
+        water_list = [water_list]
+    # ensure water_list is a tuple of ints
+    water_list_parsed = tuple(int(w) for w in water_list)
+    logger.warning(f"Parsed {water_list_parsed=}")
+    return water_list_parsed
