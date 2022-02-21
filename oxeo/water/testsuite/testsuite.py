@@ -8,7 +8,7 @@ import pandas as pd
 from attrs import define
 
 from oxeo.water.models import Predictor
-from oxeo.water.models.utils import WaterBody
+from oxeo.water.models.utils import WaterBody, merge_masks_all_constellations
 
 
 @define
@@ -32,7 +32,6 @@ class TestWaterBody(ABC):
     metrics: Dict[str, Callable]
     y_true: np.ndarray = attrs.field(init=False)
     y_pred: np.ndarray = attrs.field(init=False)
-    timestamps: np.ndarray = attrs.field(init=False)
 
     def calculate_metrics(self) -> pd.DataFrame:
         if (self.metrics is None) or not isinstance(self.metrics, dict):
@@ -42,15 +41,32 @@ class TestWaterBody(ABC):
             self.generate_y_true()
         if not hasattr(self, "y_pred"):
             self.generate_y_pred()
-        if not hasattr(self, "timestamps"):
-            self.generate_timestamps()
 
         results = defaultdict(list)
-        for m_name, m_fun in self.metrics.items():
-            results[m_name] = m_fun(self.y_true, self.y_pred)
+
+        for i, tsm in enumerate(self.y_true):
+            for m_name, m_fun in self.metrics.items():
+                tsm_pred = self.y_pred[i]
+                timestamps_y_true = tsm.data.revisits.values
+                timestamps_y_pred = tsm_pred.data.revisits.values
+                timestamps_intersect = np.intersect1d(
+                    timestamps_y_true, timestamps_y_pred
+                )
+
+                timestamps_intersect = timestamps_intersect[
+                    (timestamps_intersect >= np.datetime64(self.start_date))
+                    & (timestamps_intersect <= np.datetime64(self.end_date))
+                ]
+                y_true_values = tsm.data.sel(revisits=timestamps_intersect).values
+                y_pred_values = tsm_pred.data.sel(revisits=timestamps_intersect).values
+                results[m_name].extend(m_fun(y_true_values, y_pred_values))
+
+            results["constellation"].extend(
+                [tsm.constellation] * len(timestamps_intersect)
+            )
+            results["timestamps"].extend(timestamps_intersect)
 
         df = pd.DataFrame.from_dict(results)
-        df["timestamps"] = self.timestamps
         return df
 
     @abstractmethod
@@ -65,23 +81,14 @@ class TestWaterBody(ABC):
         dates and constellation using the given predictor.
         """
 
-    @abstractmethod
-    def generate_timestamps(self):
-        """This method generates the timestamps from the waterbody,
-        dates and constellation.
-        """
-
 
 @define
 class PixelTestWaterBody(TestWaterBody):
     def generate_y_true(self):
-        return np.array([1, 0, 0, 1])
+        self.y_true = merge_masks_all_constellations(self.waterbody, "cnn")
 
     def generate_y_pred(self):
-        return np.array([1, 1, 0, 1])
-
-    def generate_timestamps(self):
-        return np.arange(np.datetime64("2017-01-01"), np.datetime64("2017-01-05"))
+        self.y_pred = merge_masks_all_constellations(self.waterbody, "cnn")
 
 
 @define
