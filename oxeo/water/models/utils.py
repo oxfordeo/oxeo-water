@@ -1,17 +1,23 @@
 from datetime import datetime
+from functools import partial
 from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
+import sqlalchemy
 import torch
 import xarray as xr
 import zarr
 from attr import define
+from pyproj import CRS
 from pystac.extensions.eo import Band
 from satextractor.models import Tile
 from satextractor.models.constellation_info import BAND_INFO
 from satextractor.tiler import split_region_in_utm_tiles
+from shapely import wkb
 from shapely.geometry import MultiPolygon, Polygon
+from sqlalchemy import column, table
+from sqlalchemy.sql import select
 from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
@@ -259,6 +265,16 @@ def load_tile_and_resize(
     return sample
 
 
+def data2gdf(
+    data: list[tuple[int, str, str]],
+) -> gpd.GeoDataFrame:
+    wkb_hex = partial(wkb.loads, hex=True)
+    gdf = gpd.GeoDataFrame(data, columns=["area_id", "name", "geometry"])
+    gdf.geometry = gdf.geometry.apply(wkb_hex)
+    gdf.crs = CRS.from_epsg(4326)
+    return gdf
+
+
 def get_tiles(
     geom: Union[Polygon, MultiPolygon, gpd.GeoSeries, gpd.GeoDataFrame]
 ) -> list[Tile]:
@@ -277,9 +293,21 @@ def make_paths(tiles, constellations, root_dir):
     ]
 
 
+def get_all_paths(
+    gdf: gpd.GeoDataFrame,
+    constellations: list[str],
+    root_dir: str = "prod",
+) -> list[TilePath]:
+    all_tiles = get_tiles(gdf)
+    all_tilepaths = make_paths(all_tiles, constellations, root_dir)
+    logger.info(
+        f"All tiles for the supplied geometry: {[t.path for t in all_tilepaths]}"
+    )
+    return all_tilepaths
+
+
 def get_waterbodies(
     gdf: gpd.GeoDataFrame,
-    bucket: str,
     constellations: list[str],
     root_dir: str = "prod",
 ) -> list[WaterBody]:
@@ -289,21 +317,21 @@ def get_waterbodies(
         waterbodies.append(
             WaterBody(
                 **water,
-                paths=make_paths(bucket, tiles, constellations, root_dir=root_dir),
+                paths=make_paths(tiles, constellations, root_dir=root_dir),
             )
         )
     return waterbodies
 
 
-def parse_water_list(
-    water_list: Union[str, int, list],
-    postgis_password: str,
-) -> tuple[int, ...]:
-    if isinstance(water_list, str):
-        water_list = water_list.split(",")
-    if isinstance(water_list, int):
-        water_list = [water_list]
-    # ensure water_list is a tuple of ints
-    water_list_parsed = tuple(int(w) for w in water_list)
-    logger.warning(f"Parsed {water_list_parsed=}")
-    return water_list_parsed
+def fetch_water_list(
+    water_list: tuple[int], engine: sqlalchemy.engine.Engine
+) -> list[tuple[int, str, str]]:
+    water = table("water", column("area_id"), column("name"), column("geom"))
+    with engine.connect() as conn:
+        s = select(
+            [water.c.area_id, water.c.name, water.c.geom],
+            water.c.area_id.in_(water_list),
+        )
+        data = conn.execute(s).fetchall()
+
+    return data
