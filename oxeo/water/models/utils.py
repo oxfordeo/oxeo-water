@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
+import pyproj
 import torch
 import xarray as xr
 import zarr
@@ -33,14 +34,16 @@ def tile_from_id(id):
     min_y = yloc * bbox_size_y
     max_x = min_x + bbox_size_x
     max_y = min_y + bbox_size_y
+    south = row < "N"
+    epsg = pyproj.CRS.from_dict({"proj": "utm", "zone": zone, "south": south}).to_epsg()
     return Tile(
-        zone=zone,
+        zone=int(zone),
         row=row,
         min_x=min_x,
         min_y=min_y,
         max_x=max_x,
         max_y=max_y,
-        epsg="NONE",
+        epsg=epsg,
     )
 
 
