@@ -95,6 +95,13 @@ class TimeseriesMask:
     resolution: int
 
 
+@define
+class TimeseriesScalar:
+    data: xr.DataArray  # T
+    constellation: str
+    resolution: int
+
+
 def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
     # TODO: Probably unnecessary to load all patches for this,
     # could just assume they're the same size
@@ -125,7 +132,9 @@ date_latest = datetime(2200, 1, 1)
 
 
 def merge_masks_all_constellations(
-    waterbody: WaterBody, mask: str
+    waterbody: WaterBody,
+    mask: str,
+    storage_path: str = "gs://oxeo-water",  # can be gs://oxeo-water or local dir
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
     mask_list = []
@@ -134,7 +143,9 @@ def merge_masks_all_constellations(
             logger.info(
                 f"merge_masks_all_constellations; {constellation=}; {waterbody.area_id=}: merging"
             )
-            tsm = merge_masks_one_constellation(waterbody, constellation, mask)
+            tsm = merge_masks_one_constellation(
+                waterbody, constellation, mask, storage_path
+            )
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
             logger.info(
@@ -148,6 +159,7 @@ def merge_masks_one_constellation(
     waterbody: WaterBody,
     constellation: str,
     mask: str,
+    storage_path: str = "gs://oxeo-water",  # can be gs://oxeo-water or local dir
 ):
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
@@ -166,7 +178,7 @@ def merge_masks_one_constellation(
     tile_ids = [
         tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
     ]
-    paths = [f"gs://oxeo-water/{root_dir}/{t}" for t in tile_ids]
+    paths = [f"{storage_path}/{root_dir}/{t}" for t in tile_ids]
     c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
 
     logger.info(

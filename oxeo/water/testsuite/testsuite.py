@@ -16,15 +16,16 @@ class TestWaterBody(ABC):
     """
     This is an abstract class to use as base for testing a waterbody.
     A TestWaterBody should be instantiated with:
-        - predictor
         - waterbody
         - start_date
         - end_date
         - constellation
         - metrics
+
+    Concrete subclasses should implement methods generate_y_true and generate_y_pred
+    and optionally can override calculate_metrics.
     """
 
-    predictor: Predictor
     waterbody: WaterBody
     start_date: str
     end_date: str
@@ -34,6 +35,17 @@ class TestWaterBody(ABC):
     y_pred: np.ndarray = attrs.field(init=False)
 
     def calculate_metrics(self) -> pd.DataFrame:
+        """Method to calculate the metrics using y_true and y_pred.
+        By default this method assumes y_true and y_pred to be a list of TimeseriesMask.
+        It iterates this list and for each element applies all the provided metrics.
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            pd.DataFrame: a dataframe containing a row per timestamp with one column per metric.
+                        | timestamp | constellation | metric_1 | metric_2 | etc
+        """
         if (self.metrics is None) or not isinstance(self.metrics, dict):
             raise ValueError("Metrics must be a dictionary of callable.")
 
@@ -64,7 +76,7 @@ class TestWaterBody(ABC):
             results["constellation"].extend(
                 [tsm.constellation] * len(timestamps_intersect)
             )
-            results["timestamps"].extend(timestamps_intersect)
+            results["timestamp"].extend(timestamps_intersect)
 
         df = pd.DataFrame.from_dict(results)
         return df
@@ -84,6 +96,17 @@ class TestWaterBody(ABC):
 
 @define
 class PixelTestWaterBody(TestWaterBody):
+    def generate_y_true(self):
+        self.y_true = merge_masks_all_constellations(self.waterbody, "cnn")
+
+    def generate_y_pred(self):
+        self.y_pred = merge_masks_all_constellations(self.waterbody, "cnn")
+
+
+@define
+class TrainingPixelTestWaterBody(TestWaterBody):
+    predictor: Predictor
+
     def generate_y_true(self):
         self.y_true = merge_masks_all_constellations(self.waterbody, "cnn")
 
