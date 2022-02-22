@@ -107,7 +107,7 @@ def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
     # could just assume they're the same size
     sizes = []
     for patch in patch_paths:
-        arr_path = f"gs://{patch.path}/data"
+        arr_path = f"{patch.path}/data"
         logger.info(f"Loading to check size {arr_path=}")
         z = zarr.open(arr_path, "r")
         x, y = z.shape[2:]
