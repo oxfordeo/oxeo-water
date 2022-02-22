@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Union
 
 import attrs
 import numpy as np
@@ -8,7 +8,12 @@ import pandas as pd
 from attrs import define
 
 from oxeo.water.models import Predictor
-from oxeo.water.models.utils import WaterBody, merge_masks_all_constellations
+from oxeo.water.models.utils import (
+    TimeseriesMask,
+    TimeseriesScalar,
+    WaterBody,
+    merge_masks_all_constellations,
+)
 
 
 @define
@@ -19,7 +24,6 @@ class TestWaterBody(ABC):
         - waterbody
         - start_date
         - end_date
-        - constellation
         - metrics
 
     Concrete subclasses should implement methods generate_y_true and generate_y_pred
@@ -29,10 +33,13 @@ class TestWaterBody(ABC):
     waterbody: WaterBody
     start_date: str
     end_date: str
-    constellation: str
     metrics: Dict[str, Callable]
-    y_true: np.ndarray = attrs.field(init=False)
-    y_pred: np.ndarray = attrs.field(init=False)
+    y_true: Union[List[TimeseriesMask], List[TimeseriesScalar]] = attrs.field(
+        init=False
+    )
+    y_pred: Union[List[TimeseriesMask], List[TimeseriesScalar]] = attrs.field(
+        init=False
+    )
 
     def calculate_metrics(self) -> pd.DataFrame:
         """Method to calculate the metrics using y_true and y_pred.
@@ -96,22 +103,32 @@ class TestWaterBody(ABC):
 
 @define
 class PixelTestWaterBody(TestWaterBody):
+    y_true_mask_name: str
+    y_pred_mask_name: str
+
     def generate_y_true(self):
-        self.y_true = merge_masks_all_constellations(self.waterbody, "cnn")
+        self.y_true = merge_masks_all_constellations(
+            self.waterbody, self.y_true_mask_name
+        )
 
     def generate_y_pred(self):
-        self.y_pred = merge_masks_all_constellations(self.waterbody, "cnn")
+        self.y_pred = merge_masks_all_constellations(
+            self.waterbody, self.y_pred_mask_name
+        )
 
 
 @define
 class TrainingPixelTestWaterBody(TestWaterBody):
-    predictor: Predictor
+    predictor: Predictor  # predictor returning List[TimeseriesMask]
+    y_true_mask_name: str
 
     def generate_y_true(self):
-        self.y_true = merge_masks_all_constellations(self.waterbody, "cnn")
+        self.y_true = merge_masks_all_constellations(
+            self.waterbody, self.y_true_mask_name
+        )
 
     def generate_y_pred(self):
-        self.y_pred = merge_masks_all_constellations(self.waterbody, "cnn")
+        self.y_pred = self.predictor.predict(self.waterbody)
 
 
 @define
