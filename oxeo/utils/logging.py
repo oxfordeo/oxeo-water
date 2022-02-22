@@ -6,7 +6,7 @@ def get_logger() -> logging.Logger:
 
     logging.basicConfig(
         format="%(asctime)s | %(levelname)8s | %(module)s:%(funcName)s:%(lineno)s - %(message)s",
-        level=logging.DEBUG,
+        level=logging.INFO,
     )
     logger = logging.getLogger("oxeo.water")
     return logger
