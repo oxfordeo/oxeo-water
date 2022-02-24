@@ -56,12 +56,11 @@ def tile_from_id(id):
 class TilePath:
     tile: Tile
     constellation: str
-    bucket: str = "oxeo-water"
-    root: str = "prod"
+    root: str = "gs://oxeo-water/prod"
 
     @property
     def path(self):
-        return f"gs://{self.bucket}/{self.root}/{self.tile.id}/{self.constellation}"
+        return f"{self.root}/{self.tile.id}/{self.constellation}"
 
     @property
     def timestamps_path(self):
@@ -134,7 +133,6 @@ date_latest = datetime(2200, 1, 1)
 def merge_masks_all_constellations(
     waterbody: WaterBody,
     mask: str,
-    storage_path: str = "gs://oxeo-water",  # can be gs://oxeo-water or local dir
 ) -> List[TimeseriesMask]:
     constellations = list({t.constellation for t in waterbody.paths})
     mask_list = []
@@ -143,9 +141,7 @@ def merge_masks_all_constellations(
             logger.info(
                 f"merge_masks_all_constellations; {constellation=}; {waterbody.area_id=}: merging"
             )
-            tsm = merge_masks_one_constellation(
-                waterbody, constellation, mask, storage_path
-            )
+            tsm = merge_masks_one_constellation(waterbody, constellation, mask)
             mask_list.append(tsm)
         except (ValueError, FileNotFoundError, KeyError, ArrayNotFoundError) as e:
             logger.info(
@@ -159,7 +155,6 @@ def merge_masks_one_constellation(
     waterbody: WaterBody,
     constellation: str,
     mask: str,
-    storage_path: str = "gs://oxeo-water",  # can be gs://oxeo-water or local dir
 ):
     patch_paths: List[TilePath] = [
         pp for pp in waterbody.paths if pp.constellation == constellation
@@ -178,7 +173,8 @@ def merge_masks_one_constellation(
     tile_ids = [
         tp.tile.id for tp in waterbody.paths if tp.constellation == constellation
     ]
-    paths = [f"{storage_path}/{root_dir}/{t}" for t in tile_ids]
+    paths = [f"{root_dir}/{t}" for t in tile_ids]
+    logger.info(f"paths {paths}")
     c_data = ConstellationData(constellation, bands=["mask"], paths=paths)
 
     logger.info(
@@ -308,7 +304,7 @@ def make_paths(tiles, constellations, root_dir):
 def get_all_paths(
     gdf: gpd.GeoDataFrame,
     constellations: list[str],
-    root_dir: str = "prod",
+    root_dir: str = "gs://oxeo-water/prod",
 ) -> list[TilePath]:
     all_tiles = get_tiles(gdf)
     all_tilepaths = make_paths(all_tiles, constellations, root_dir)
@@ -321,7 +317,7 @@ def get_all_paths(
 def get_waterbodies(
     gdf: gpd.GeoDataFrame,
     constellations: list[str],
-    root_dir: str = "prod",
+    root_dir: str = "gs://oxeo-water/prod",
 ) -> list[WaterBody]:
     waterbodies = []
     for water in gdf.to_dict(orient="records"):
