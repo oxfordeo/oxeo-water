@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Union
 
 import attrs
 import numpy as np
@@ -34,6 +34,7 @@ class TestWaterBody(ABC):
     start_date: str
     end_date: str
     metrics: Dict[str, Callable]
+    fs: Any
     y_true: Union[List[TimeseriesMask], List[TimeseriesScalar]] = attrs.field(
         init=False
     )
@@ -128,7 +129,9 @@ class TrainingPixelTestWaterBody(TestWaterBody):
         )
 
     def generate_y_pred(self):
-        self.y_pred = self.predictor.predict(self.waterbody)
+        self.y_pred = self.predictor.predict(
+            self.waterbody, self.start_date, self.end_date, self.fs
+        )
 
 
 @define
