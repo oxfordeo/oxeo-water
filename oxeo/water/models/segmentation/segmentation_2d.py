@@ -17,7 +17,7 @@ from oxeo.water.datamodules.constants import (
 )
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models import Predictor
-from oxeo.water.models.utils import load_tile, resize_sample
+from oxeo.water.models.utils import identify, load_tile, resize_sample
 
 
 class Segmentation2D(LightningModule):
@@ -164,11 +164,7 @@ class Segmentation2DPredictor(Predictor):
         if fs is not None:
             fs_mapper = fs.get_mapper
         else:
-
-            def id(x):
-                return x
-
-            fs_mapper = id
+            fs_mapper = identify
 
         sample = load_tile(
             fs_mapper=fs_mapper,

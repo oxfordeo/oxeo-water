@@ -343,3 +343,7 @@ def fetch_water_list(
         data = conn.execute(s).fetchall()
 
     return data
+
+
+def identify(x):
+    return x
