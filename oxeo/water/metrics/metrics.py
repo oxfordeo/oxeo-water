@@ -23,16 +23,11 @@ from skimage.morphology import (
 from tqdm import tqdm
 from zarr.errors import PathNotFoundError
 
-from oxeo.water.models.utils import (
-    TilePath,
-    TimeseriesMask,
-    WaterBody,
-    load_tile,
-    tile_from_id,
-)
+from oxeo.core.logging import logger
+from oxeo.core.models.tile import TilePath, load_tile, tile_from_id
+from oxeo.core.models.timeseries import TimeseriesMask
+from oxeo.core.models.waterbody import WaterBody
 from oxeo.water.utils import tqdm_joblib
-from oxeo.utils.logging import logger
-
 
 UNITS = ["pixel", "meter"]
 
@@ -154,7 +149,7 @@ def segmentation_area(
     total_area = (seg > 0).sum(axis=(-2, -1))
     if unit == "meter":
         assert resolution is not None, "resolution is mandatory when unit is 'meter'"
-        total_area *= resolution**2
+        total_area *= resolution ** 2
 
     return total_area
 

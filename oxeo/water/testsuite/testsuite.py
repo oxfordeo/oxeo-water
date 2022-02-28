@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 from attrs import define
 
-from oxeo.water.models import Predictor
-from oxeo.water.models.utils import (
+from oxeo.core.models.timeseries import (
     TimeseriesMask,
     TimeseriesScalar,
-    WaterBody,
     merge_masks_all_constellations,
 )
+from oxeo.core.models.waterbody import WaterBody
+from oxeo.water.models import Predictor
 
 
 @define

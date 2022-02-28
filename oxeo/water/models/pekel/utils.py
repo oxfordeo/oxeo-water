@@ -4,7 +4,7 @@ import numpy as np
 from attr import define
 from skimage.color import rgb2hsv
 
-from oxeo.water.models.utils import get_band_list
+from oxeo.core.models.tile import get_band_list
 
 
 @define

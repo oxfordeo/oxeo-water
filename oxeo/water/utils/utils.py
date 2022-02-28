@@ -11,7 +11,11 @@ import rich.tree
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities import rank_zero_only
 
-from oxeo.utils.logging import get_logger
+from oxeo.core.logging import get_logger
+
+
+def identity(x):
+    return x
 
 
 @contextlib.contextmanager

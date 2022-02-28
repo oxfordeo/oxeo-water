@@ -1,10 +1,11 @@
 import numpy as np
 from tqdm import tqdm
 
+from oxeo.core.models.tile import load_tile
 from oxeo.satools.processing import get_mtl_dict, to_toa
 from oxeo.water.models import Predictor
 from oxeo.water.models.pekel import masks, utils
-from oxeo.water.models.utils import identity, load_tile
+from oxeo.water.utils.utils import identity
 
 
 class PekelPredictor(Predictor):
