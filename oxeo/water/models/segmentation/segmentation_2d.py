@@ -10,14 +10,14 @@ from torch.nn import CrossEntropyLoss
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
-from oxeo.utils.logging import logger
+from oxeo.core.logging import logger
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
     CONSTELLATION_BAND_STD,
 )
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models import Predictor
-from oxeo.water.models.utils import identify, load_tile, resize_sample
+from oxeo.water.models.utils import identity, load_tile, resize_sample
 
 
 class Segmentation2D(LightningModule):
@@ -164,7 +164,7 @@ class Segmentation2DPredictor(Predictor):
         if fs is not None:
             fs_mapper = fs.get_mapper
         else:
-            fs_mapper = identify
+            fs_mapper = identity
 
         sample = load_tile(
             fs_mapper=fs_mapper,

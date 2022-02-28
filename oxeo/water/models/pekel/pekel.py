@@ -4,7 +4,7 @@ from tqdm import tqdm
 from oxeo.satools.processing import get_mtl_dict, to_toa
 from oxeo.water.models import Predictor
 from oxeo.water.models.pekel import masks, utils
-from oxeo.water.models.utils import identify, load_tile
+from oxeo.water.models.utils import identity, load_tile
 
 
 class PekelPredictor(Predictor):
@@ -22,7 +22,7 @@ class PekelPredictor(Predictor):
         if fs is not None:
             fs_mapper = fs.get_mapper
         else:
-            fs_mapper = identify
+            fs_mapper = identity
         arr = load_tile(
             fs_mapper=fs_mapper,
             tile_path=tile_path,

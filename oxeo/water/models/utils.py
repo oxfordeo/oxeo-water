@@ -21,8 +21,8 @@ from sqlalchemy.sql import select
 from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.core import ArrayNotFoundError
 
+from oxeo.core.logging import logger
 from oxeo.satools.io import ConstellationData, constellation_dataarray
-from oxeo.utils.logging import logger
 
 
 def get_band_list(constellation: str) -> List[str]:
@@ -347,5 +347,5 @@ def fetch_water_list(
     return data
 
 
-def identify(x):
+def identity(x):
     return x
