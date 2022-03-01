@@ -4,7 +4,7 @@ from typing import Iterator, Tuple
 import attr
 from torch.utils.data import Dataset, Sampler
 
-from oxeo.utils.logging import logger
+from oxeo.core.logging import logger
 
 
 @attr.s

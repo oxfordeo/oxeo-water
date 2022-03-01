@@ -4,8 +4,8 @@ import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
+from oxeo.core.logging import logger
 from oxeo.satools.io import ConstellationData
-from oxeo.utils.logging import logger
 
 from .datasets.virtual_dataset import VirtualDataset
 
