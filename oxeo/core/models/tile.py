@@ -13,9 +13,10 @@ from satextractor.models.constellation_info import BAND_INFO
 from satextractor.tiler import split_region_in_utm_tiles
 from shapely.geometry import MultiPolygon, Polygon
 from torchvision.transforms.functional import InterpolationMode, resize
+from zarr.errors import ArrayNotFoundError
 
 from oxeo.core.logging import logger
-from oxeo.water.models.base import Predictor
+from oxeo.water.models import model_factory
 from oxeo.water.utils.utils import identity
 
 
@@ -218,12 +219,16 @@ def load_tile_and_resize(
 def predict_tile(
     tile_path: TilePath,
     model_name: str,
+    ckpt_path: str,
+    target_size: int,
+    bands: list[str],
+    cnn_batch_size: int,
+    revisit_chunk_size: int,
     start_date: str,
     end_date: str,
-    revisit_chunk_size: int,
-    predictor: Predictor,
     fs: Any = None,
-    write_output: bool = True,
+    overwrite: bool = False,
+    gpu: int = 0,
 ) -> np.ndarray:
     sdt = np.datetime64(datetime.strptime(start_date, "%Y-%m-%d"))
     edt = np.datetime64(datetime.strptime(end_date, "%Y-%m-%d"))
@@ -231,7 +236,7 @@ def predict_tile(
         fs_mapper = fs.get_mapper
     else:
         fs_mapper = identity
-    mask_list = []
+
     timestamps = zarr.open(fs_mapper(tile_path.timestamps_path), "r")[:]
     timestamps = np.array(
         [np.datetime64(datetime.fromisoformat(el)) for el in timestamps],
@@ -240,9 +245,51 @@ def predict_tile(
     min_idx = date_overlap.min()
     max_idx = date_overlap.max() + 1
 
+    logger.info(f"From overlap with imagery and dates entered: {min_idx=}, {max_idx=}")
+
     mask_path = f"{tile_path.mask_path}/{model_name}"
 
+    if not overwrite:
+        # check existing masks and only do new ones
+        try:
+            mask_arr = zarr.open_array(fs_mapper(mask_path), "r")
+            prev_max_idx = int(mask_arr.attrs["max_filled"])
+            min_idx = prev_max_idx + 1
+            logger.warning(f"Found {prev_max_idx=}, set {min_idx=}")
+        except ArrayNotFoundError:
+            logger.warning("Set overwrite=False, but there was no existing array")
+        except KeyError:
+            logger.warning(
+                "Set overwrite=False, but attrs['max_filled'] had not been set"
+            )
+
+    if min_idx >= max_idx:
+        logger.warning("min_idx is >= max_idx: nothing to do, skipping")
+        # TODO This should rather return the last date IN the array
+        # Otherwise this will always just be 2100-01-01 or something
+        return end_date, end_date
+
+    if gpu > 0:
+        import torch
+
+        cuda = torch.cuda.is_available()
+        logger.info(f"CUDA available: {cuda}")
+
+    logger.info("Loading model")
+    predictor = model_factory(model_name).predictor(
+        ckpt_path=ckpt_path,
+        fs=fs,
+        batch_size=cnn_batch_size,
+        bands=bands,
+        target_size=target_size,
+    )
+
+    mask_list = []
     for i in range(min_idx, max_idx, revisit_chunk_size):
+        logger.info(
+            f"creating mask for {tile_path.path}, revisits {i} to "
+            f"{min(i + revisit_chunk_size,max_idx)} of {max_idx}"
+        )
         revisit_masks = predictor.predict(
             tile_path,
             revisit=slice(i, min(i + revisit_chunk_size, max_idx)),
@@ -251,21 +298,27 @@ def predict_tile(
         mask_list.append(revisit_masks)
     masks = np.vstack(mask_list)
 
-    if write_output:
-        time_shape = timestamps.shape[0]
-        geo_shape = masks.shape[1:]
-        output_shape = (time_shape, *geo_shape)
+    time_shape = timestamps.shape[0]
+    geo_shape = masks.shape[1:]
+    output_shape = (time_shape, *geo_shape)
 
-        mask_arr = zarr.open_array(
-            fs_mapper(mask_path),
-            "a",
-            shape=output_shape,
-            chunks=(1, 1000, 1000),
-            dtype=np.uint8,
-        )
-        mask_arr.resize(*output_shape)
-        mask_arr.attrs["max_filled"] = int(max_idx)
+    logger.info(f"Saving mask to {mask_path}")
+    logger.info(f"Output zarr shape: {output_shape}")
 
-        # write data to archive
-        mask_arr[min_idx:max_idx, ...] = masks
-    return masks
+    mask_arr = zarr.open_array(
+        fs_mapper(mask_path),
+        "a",
+        shape=output_shape,
+        chunks=(1, 1000, 1000),
+        dtype=np.uint8,
+    )
+    mask_arr.resize(*output_shape)
+    mask_arr.attrs["max_filled"] = int(max_idx)
+
+    # write data to archive
+    mask_arr[min_idx:max_idx, ...] = masks
+
+    written_start = np.datetime_as_string(timestamps[min_idx], unit="D")
+    written_end = np.datetime_as_string(timestamps[max_idx - 1], unit="D")
+
+    return written_start, written_end
