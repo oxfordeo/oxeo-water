@@ -16,7 +16,7 @@ from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.errors import ArrayNotFoundError
 
 from oxeo.core.logging import logger
-from oxeo.water.models import model_factory
+from oxeo.water.models.factory import model_factory
 from oxeo.water.utils.utils import identity
 
 
