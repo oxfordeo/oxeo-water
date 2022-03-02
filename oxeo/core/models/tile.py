@@ -1,4 +1,5 @@
-from typing import Dict, List, Tuple, Union
+from datetime import datetime
+from typing import Any, Dict, List, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
@@ -14,6 +15,8 @@ from shapely.geometry import MultiPolygon, Polygon
 from torchvision.transforms.functional import InterpolationMode, resize
 
 from oxeo.core.logging import logger
+from oxeo.water.models.base import Predictor
+from oxeo.water.utils.utils import identity
 
 
 @define(frozen=True)
@@ -210,3 +213,59 @@ def load_tile_and_resize(
     )
     sample = resize_sample(sample, target_size)
     return sample
+
+
+def predict_tile(
+    tile_path: TilePath,
+    model_name: str,
+    start_date: str,
+    end_date: str,
+    revisit_chunk_size: int,
+    predictor: Predictor,
+    fs: Any = None,
+    write_output: bool = True,
+) -> np.ndarray:
+    sdt = np.datetime64(datetime.strptime(start_date, "%Y-%m-%d"))
+    edt = np.datetime64(datetime.strptime(end_date, "%Y-%m-%d"))
+    if fs is not None:
+        fs_mapper = fs.get_mapper
+    else:
+        fs_mapper = identity
+    mask_list = []
+    timestamps = zarr.open(fs_mapper(tile_path.timestamps_path), "r")[:]
+    timestamps = np.array(
+        [np.datetime64(datetime.fromisoformat(el)) for el in timestamps],
+    )
+    date_overlap = np.where((timestamps >= sdt) & (timestamps <= edt))[0]
+    min_idx = date_overlap.min()
+    max_idx = date_overlap.max() + 1
+
+    mask_path = f"{tile_path.mask_path}/{model_name}"
+
+    for i in range(min_idx, max_idx, revisit_chunk_size):
+        revisit_masks = predictor.predict(
+            tile_path,
+            revisit=slice(i, min(i + revisit_chunk_size, max_idx)),
+            fs=fs,
+        )
+        mask_list.append(revisit_masks)
+    masks = np.vstack(mask_list)
+
+    if write_output:
+        time_shape = timestamps.shape[0]
+        geo_shape = masks.shape[1:]
+        output_shape = (time_shape, *geo_shape)
+
+        mask_arr = zarr.open_array(
+            fs_mapper(mask_path),
+            "a",
+            shape=output_shape,
+            chunks=(1, 1000, 1000),
+            dtype=np.uint8,
+        )
+        mask_arr.resize(*output_shape)
+        mask_arr.attrs["max_filled"] = int(max_idx)
+
+        # write data to archive
+        mask_arr[min_idx:max_idx, ...] = masks
+    return masks
