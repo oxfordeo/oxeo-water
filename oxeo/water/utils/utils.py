@@ -14,10 +14,6 @@ from pytorch_lightning.utilities import rank_zero_only
 from oxeo.core.logging import get_logger
 
 
-def identity(x):
-    return x
-
-
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
     """Context manager to patch joblib to report into tqdm progress bar given as argument"""

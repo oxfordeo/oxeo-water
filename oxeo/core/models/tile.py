@@ -16,8 +16,7 @@ from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.errors import ArrayNotFoundError
 
 from oxeo.core.logging import logger
-from oxeo.water.models.factory import model_factory
-from oxeo.water.utils.utils import identity
+from oxeo.core.utils import identity
 
 
 @define(frozen=True)
@@ -219,10 +218,7 @@ def load_tile_and_resize(
 def predict_tile(
     tile_path: TilePath,
     model_name: str,
-    ckpt_path: str,
-    target_size: int,
-    bands: list[str],
-    cnn_batch_size: int,
+    predictor: Any,
     revisit_chunk_size: int,
     start_date: str,
     end_date: str,
@@ -274,15 +270,6 @@ def predict_tile(
 
         cuda = torch.cuda.is_available()
         logger.info(f"CUDA available: {cuda}")
-
-    logger.info("Loading model")
-    predictor = model_factory(model_name).predictor(
-        ckpt_path=ckpt_path,
-        fs=fs,
-        batch_size=cnn_batch_size,
-        bands=bands,
-        target_size=target_size,
-    )
 
     mask_list = []
     for i in range(min_idx, max_idx, revisit_chunk_size):

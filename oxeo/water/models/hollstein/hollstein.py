@@ -5,7 +5,7 @@ from functools import reduce
 import numpy as np
 from treelib import Tree
 
-from oxeo.water.models import Predictor
+from oxeo.water.models.base import Predictor
 
 LABELS = {"clear": 0, "water": 1, "shadow": 2, "cloud": 3, "cirrus": 4, "snow": 5}
 

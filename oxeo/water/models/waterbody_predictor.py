@@ -31,7 +31,12 @@ class WaterBodyPredictor:
         )
 
     def predict(
-        self, waterbody: WaterBody, start_date: str, end_date: str, fs: Any = None
+        self,
+        waterbody: WaterBody,
+        start_date: str,
+        end_date: str,
+        fs: Any = None,
+        gpu=0,
     ) -> List[TimeseriesMask]:
         tile_paths = waterbody.paths
         for t_path in tile_paths:
@@ -39,12 +44,13 @@ class WaterBodyPredictor:
             predict_tile(
                 t_path,
                 self.model_name,
+                self.predictor,
+                self.revisit_chunk_size,
                 start_date,
                 end_date,
-                self.revisit_chunk_size,
-                self.predictor,
                 fs,
-                write_output=True,
+                overwrite=False,
+                gpu=gpu,
             )
 
         return merge_masks_all_constellations(waterbody, self.model_name)

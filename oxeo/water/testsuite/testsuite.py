@@ -13,7 +13,7 @@ from oxeo.core.models.timeseries import (
     merge_masks_all_constellations,
 )
 from oxeo.core.models.waterbody import WaterBody
-from oxeo.water.models import Predictor
+from oxeo.water.models.base import Predictor
 
 
 @define

@@ -1,4 +1,4 @@
-from oxeo.water.models import ModelDef
+from oxeo.water.models.base import ModelDef
 from oxeo.water.models.cloud_mask import CloudMaskPredictor
 from oxeo.water.models.pekel import PekelPredictor
 from oxeo.water.models.segmentation import Segmentation2DPredictor

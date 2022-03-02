@@ -12,13 +12,13 @@ from tqdm import tqdm
 
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import load_tile, resize_sample
+from oxeo.core.utils import identity
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
     CONSTELLATION_BAND_STD,
 )
 from oxeo.water.datamodules.transforms import ConstellationNormalize
-from oxeo.water.models import Predictor
-from oxeo.water.utils.utils import identity
+from oxeo.water.models.base import Predictor
 
 
 class Segmentation2D(LightningModule):
