@@ -32,8 +32,6 @@ def seg_area_all(
     segs: List[TimeseriesMask],
     waterbody: WaterBody,
     label_to_mask: int = 1,
-    n_jobs=-1,
-    verbose=0,
 ) -> pd.DataFrame:
     """Create a scalar timeseries for all tiles in a WaterBody and ALL constellations."""
     logger.info(f"seg_area_all; {waterbody.area_id}: calculate metrics")
@@ -43,7 +41,12 @@ def seg_area_all(
     return pd.concat(dfs, axis=0)
 
 
-def seg_area_single(tsm, tiles, geom, label_to_mask):
+def seg_area_single(
+    tsm: TimeseriesMask,
+    tiles: list[Tile],
+    geom: Union[Polygon, MultiPolygon],
+    label_to_mask: int = 1,
+) -> pd.DataFrame:
     """Calculate scalar timeseries for all tiles in waterbody for a SINGLE constellation."""
     logger.info(f"Calulating metrics for {tsm.constellation}")
     # osm_raster must be created separately for each constellation
@@ -73,7 +76,13 @@ def seg_area_single(tsm, tiles, geom, label_to_mask):
     return df
 
 
-def mask_and_get_area(data, osm_raster, label_to_mask, unit, resolution):
+def mask_and_get_area(
+    data: xr.DataArray,
+    osm_raster: np.ndarray,
+    label_to_mask: int,
+    unit: str,
+    resolution: int,
+) -> xr.DataArray:
     """Simple wrapper for mask_cube and reduce_to_area."""
     logger.info(f"Mask and get area for group with {len(data.revisits)=}")
     data = mask_cube(data, osm_raster, label_to_mask)
@@ -82,7 +91,9 @@ def mask_and_get_area(data, osm_raster, label_to_mask, unit, resolution):
 
 
 def mask_cube(
-    data: xr.DataArray, osm_raster: np.ndarray, label_to_mask: int = 1
+    data: xr.DataArray,
+    osm_raster: np.ndarray,
+    label_to_mask: int = 1,
 ) -> xr.DataArray:
     """Clean and OSM mask each frame in the cube."""
 
@@ -101,7 +112,10 @@ def mask_cube(
     return osm_masked
 
 
-def clean_frame(lab: np.ndarray, label_to_mask: int = 1) -> np.ndarray:
+def clean_frame(
+    lab: np.ndarray,
+    label_to_mask: int = 1,
+) -> np.ndarray:
     """Clean a single timeseries frame.
 
     Args:
@@ -120,7 +134,10 @@ def clean_frame(lab: np.ndarray, label_to_mask: int = 1) -> np.ndarray:
     return lab
 
 
-def mask_osm_frame(lab: np.ndarray, geom_raster: np.ndarray) -> np.ndarray:
+def mask_osm_frame(
+    lab: np.ndarray,
+    geom_raster: np.ndarray,
+) -> np.ndarray:
     """Mask a single frame to only include pixels that are contiguous with OSM geom.
     See: https://github.com/oxfordeo/oxeo-water/issues/14
 
