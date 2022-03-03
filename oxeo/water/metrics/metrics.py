@@ -24,7 +24,7 @@ from tqdm import tqdm
 from zarr.errors import PathNotFoundError
 
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import TilePath, load_tile, tile_from_id
+from oxeo.core.models.tile import TilePath, load_tile_as_dict, tile_from_id
 from oxeo.core.models.timeseries import TimeseriesMask
 from oxeo.core.models.waterbody import WaterBody
 from oxeo.water.utils import tqdm_joblib
@@ -223,7 +223,7 @@ def tile_stat_per_band(
                 zarr_arr = zarr.open(tile_path.data_path, "r")
                 revisits = zarr_arr.shape[0]
                 for i in range(0, revisits, revisits_batch):
-                    tile_tensor = load_tile(
+                    tile_tensor = load_tile_as_dict(
                         fs_mapper=fs_mapper,
                         tile_path=tile_path,
                         revisit=slice(i, i + revisits_batch),

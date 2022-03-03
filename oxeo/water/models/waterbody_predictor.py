@@ -3,11 +3,11 @@ from typing import Any, List
 import attrs
 from attrs import define
 
-from oxeo.core.models.tile import predict_tile
 from oxeo.core.models.timeseries import TimeseriesMask, merge_masks_all_constellations
 from oxeo.core.models.waterbody import WaterBody
 from oxeo.water.models.base import Predictor
 from oxeo.water.models.factory import model_factory
+from oxeo.water.models.tile_utils import predict_tile
 
 
 @define

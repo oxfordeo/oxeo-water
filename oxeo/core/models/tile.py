@@ -2,10 +2,10 @@ from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
+import sentinelhub
 import zarr
 from attr import define
 from pyproj import CRS
-from sentinelhub import UtmGridSplitter
 from shapely.geometry import MultiPolygon, Polygon
 
 from oxeo.core.logging import logger
@@ -151,7 +151,7 @@ def make_paths(tiles, constellations, root_dir) -> List[TilePath]:
 
 def split_region_in_utm_tiles(
     region: Union[Polygon, MultiPolygon],
-    crs: CRS = CRS.WGS84,
+    crs: sentinelhub.CRS = sentinelhub.CRS.WGS84,
     bbox_size: int = 10000,
     **kwargs,
 ) -> List[Tile]:
@@ -165,7 +165,7 @@ def split_region_in_utm_tiles(
     Returns:
         [List[Tile]]: The Tiles representing each of the boxes
     """
-    utm_splitter = UtmGridSplitter([region], crs, bbox_size)
+    utm_splitter = sentinelhub.UtmGridSplitter([region], crs, bbox_size)
     crs_bboxes = utm_splitter.get_bbox_list()
     info_bboxes = utm_splitter.get_info_list()
 
