@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from oxeo.core.models.tile import load_tile
+from oxeo.core.models.tile import load_tile_as_dict
 from oxeo.core.utils import identity
 from oxeo.satools.processing import get_mtl_dict, to_toa
 from oxeo.water.models.base import Predictor
@@ -24,7 +24,7 @@ class PekelPredictor(Predictor):
             fs_mapper = fs.get_mapper
         else:
             fs_mapper = identity
-        arr = load_tile(
+        arr = load_tile_as_dict(
             fs_mapper=fs_mapper,
             tile_path=tile_path,
             masks=(),

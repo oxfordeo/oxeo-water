@@ -10,7 +10,7 @@ from joblib import Memory
 from torch.utils.data import IterableDataset, get_worker_info
 
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import TilePath, load_tile
+from oxeo.core.models.tile import TilePath, load_tile_as_dict
 from oxeo.satools.io import strdates_to_datetime
 
 from .utils import np_index
@@ -58,10 +58,10 @@ class IterableTileDataset(IterableDataset):
             mem = Memory(
                 cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
             )
-            self.load_tile = mem.cache(load_tile)
+            self.load_tile_as_dict = mem.cache(load_tile_as_dict)
         else:
             logger.info(f"Not using cache_dir {cache_dir}. Training may be slow.")
-            self.load_tile = load_tile
+            self.load_tile_as_dict = load_tile_as_dict
 
         self.tile_dates = {
             tile_path: strdates_to_datetime(
@@ -73,7 +73,7 @@ class IterableTileDataset(IterableDataset):
     def __iter__(self):
         """Each worker will use self.revisits_per_epoch // worker_info.num_workers
         tiles and extract from them, *samples_per_revisits* chips.
-        Each loaded tile will be cached using load_tile function, so subsequent calls will
+        Each loaded tile will be cached using load_tile_as_dict function, so subsequent calls will
         load data from memory.
         Yield return a random chip.
 
@@ -128,7 +128,7 @@ class IterableTileDataset(IterableDataset):
         for tile_path, timestamp, i, j in np.array(indices):
             timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
 
-            tile_sample = self.load_tile(
+            tile_sample = self.load_tile_as_dict(
                 self.fs_mapper,
                 tile_path,
                 masks=self.masks,
