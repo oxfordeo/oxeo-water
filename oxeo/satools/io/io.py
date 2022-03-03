@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from oxeo.utils.logging import logger
+from oxeo.core.logging import logger
 
 
 def strdates_to_datetime(dates: List[str]) -> np.ndarray:

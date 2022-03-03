@@ -1,6 +1,6 @@
 import numpy as np
 
-from oxeo.water.models import model_factory
+from oxeo.water.models.factory import model_factory
 
 
 def run_model(stack: np.ndarray):

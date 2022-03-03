@@ -8,9 +8,9 @@ from joblib import Memory
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from oxeo.core.logging import logger
+from oxeo.core.models.tile import TilePath, load_tile_and_resize
 from oxeo.satools.io import strdates_to_datetime
-from oxeo.water.models.utils import TilePath, load_tile_and_resize
-from oxeo.utils.logging import logger
 
 from .utils import np_index
 

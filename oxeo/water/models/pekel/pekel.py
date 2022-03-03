@@ -1,17 +1,18 @@
 import numpy as np
 from tqdm import tqdm
 
+from oxeo.core.models.tile import load_tile
+from oxeo.core.utils import identity
 from oxeo.satools.processing import get_mtl_dict, to_toa
-from oxeo.water.models import Predictor
+from oxeo.water.models.base import Predictor
 from oxeo.water.models.pekel import masks, utils
-from oxeo.water.models.utils import load_tile
 
 
 class PekelPredictor(Predictor):
     def __init__(self, fs=None, **kwargs):
         self.fs = fs
 
-    def predict(self, tile_path, revisit):
+    def predict(self, tile_path, revisit, fs):
         """Return masks for a TxBxHxW array
         Args:
             arr (np.ndarray): the array to make predictions in
@@ -19,8 +20,12 @@ class PekelPredictor(Predictor):
         Returns:
             [type]: TxHxW masks
         """
+        if fs is not None:
+            fs_mapper = fs.get_mapper
+        else:
+            fs_mapper = identity
         arr = load_tile(
-            fs_mapper=self.fs.get_mapper,
+            fs_mapper=fs_mapper,
             tile_path=tile_path,
             masks=(),
             revisit=revisit,

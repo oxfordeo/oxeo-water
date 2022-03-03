@@ -8,8 +8,8 @@ import torch
 from fsspec import asyn
 from torch.utils.data import IterableDataset
 
+from oxeo.core.logging import logger
 from oxeo.satools.io import ConstellationData, load_virtual_datasets
-from oxeo.utils.logging import logger
 
 
 class VirtualDataset(IterableDataset):

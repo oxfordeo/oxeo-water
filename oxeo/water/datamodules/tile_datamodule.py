@@ -5,14 +5,14 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
+from oxeo.core.logging import logger
+from oxeo.core.models.tile import TilePath, tile_from_id
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
     CONSTELLATION_BAND_STD,
 )
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
-from oxeo.water.models.utils import TilePath, tile_from_id
-from oxeo.utils.logging import logger
 
 from .transforms import ConstellationNormalize, FilterZeros, MasksToLabel
 from .utils import notnone_collate_fn

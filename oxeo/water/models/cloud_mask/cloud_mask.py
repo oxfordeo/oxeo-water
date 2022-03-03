@@ -9,7 +9,7 @@ from s2cloudless import S2PixelCloudDetector
 from satextractor.models.constellation_info import BAND_INFO
 from tqdm import tqdm
 
-from oxeo.water.models import Predictor
+from oxeo.water.models.base import Predictor
 from oxeo.water.utils import tqdm_joblib
 
 
