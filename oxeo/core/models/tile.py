@@ -1,22 +1,71 @@
-from datetime import datetime
-from typing import Any, Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
-import torch
 import zarr
 from attr import define
 from pyproj import CRS
-from pystac.extensions.eo import Band
-from satextractor.models import Tile
-from satextractor.models.constellation_info import BAND_INFO
-from satextractor.tiler import split_region_in_utm_tiles
+from sentinelhub import UtmGridSplitter
 from shapely.geometry import MultiPolygon, Polygon
-from torchvision.transforms.functional import InterpolationMode, resize
-from zarr.errors import ArrayNotFoundError
 
 from oxeo.core.logging import logger
-from oxeo.core.utils import identity
+from oxeo.core.utils import get_band_list, get_transform_function
+
+
+@define(frozen=True)
+class Tile:
+    zone: int
+    row: str
+    min_x: int
+    min_y: int
+    max_x: int
+    max_y: int
+    epsg: str
+
+    @property
+    def id(self) -> str:
+        return f"{self.zone}_{self.row}_{self.bbox_size_x}_{self.xloc}_{self.yloc}"
+
+    @property
+    def xloc(self) -> int:
+        return int(self.min_x / self.bbox_size_x)
+
+    @property
+    def yloc(self) -> int:
+        return int(self.min_y / self.bbox_size_y)
+
+    @property
+    def bbox(self) -> Tuple[float, float, float, float]:
+        return (self.min_x, self.min_y, self.max_x, self.max_y)
+
+    @property
+    def bbox_wgs84(self):
+        reproj_src_wgs = get_transform_function(str(self.epsg), "WGS84")
+        return (
+            *reproj_src_wgs(self.min_x, self.min_y),
+            *reproj_src_wgs(self.max_x, self.max_y),
+        )
+
+    @property
+    def bbox_size_x(self) -> int:  # in metres
+        return int(self.max_x - self.min_x)
+
+    @property
+    def bbox_size_y(self) -> int:  # in metres
+        return int(self.max_y - self.min_y)
+
+    @property
+    def bbox_size(self) -> Tuple[int, int]:  # in metres
+        return (self.bbox_size_x, self.bbox_size_y)
+
+    def contains(self, other) -> bool:
+        return (
+            self.epsg == other.epsg
+            and self.bbox[0] <= other.bbox[0]
+            and self.bbox[1] <= other.bbox[1]
+            and self.bbox[2] >= other.bbox[2]
+            and self.bbox[3] >= other.bbox[3]
+        )
 
 
 @define(frozen=True)
@@ -46,7 +95,7 @@ class TilePath:
         return f"{self.path}/metadata"
 
 
-def tile_from_id(id):
+def tile_from_id(id: str) -> Tile:
     zone, row, bbox_size_x, xloc, yloc = id.split("_")
     bbox_size_x, xloc, yloc = int(bbox_size_x), int(xloc), int(yloc)
     bbox_size_y = bbox_size_x
@@ -65,14 +114,6 @@ def tile_from_id(id):
         max_y=max_y,
         epsg=epsg,
     )
-
-
-def get_band_list(constellation: str) -> List[str]:
-    BAND_INFO["sentinel-1"] = {
-        "B1": {"band": Band.create(name="B1", common_name="VV")},
-        "B2": {"band": Band.create(name="B2", common_name="VH")},
-    }
-    return [b["band"].common_name for b in BAND_INFO[constellation].values()]
 
 
 def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
@@ -108,6 +149,42 @@ def make_paths(tiles, constellations, root_dir) -> List[TilePath]:
     ]
 
 
+def split_region_in_utm_tiles(
+    region: Union[Polygon, MultiPolygon],
+    crs: CRS = CRS.WGS84,
+    bbox_size: int = 10000,
+    **kwargs,
+) -> List[Tile]:
+    """Split a given geometry in squares measured in meters.
+    It splits the region in utm grid and the convert back to given crs.
+
+    Args:
+        region (UnionList[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]): The region to split from
+        bbox_size (int): bbox size in meters
+
+    Returns:
+        [List[Tile]]: The Tiles representing each of the boxes
+    """
+    utm_splitter = UtmGridSplitter([region], crs, bbox_size)
+    crs_bboxes = utm_splitter.get_bbox_list()
+    info_bboxes = utm_splitter.get_info_list()
+
+    tiles = [
+        Tile(
+            zone=info["utm_zone"],
+            row=info["utm_row"],
+            min_x=box.min_x,
+            min_y=box.min_y,
+            max_x=box.max_x,
+            max_y=box.max_y,
+            epsg=box.crs.epsg,
+        )
+        for info, box in zip(info_bboxes, crs_bboxes)
+    ]
+
+    return tiles
+
+
 def get_tiles(
     geom: Union[Polygon, MultiPolygon, gpd.GeoSeries, gpd.GeoDataFrame]
 ) -> list[Tile]:
@@ -131,13 +208,26 @@ def get_all_paths(
     return all_tilepaths
 
 
-def load_tile(
+def load_tile_as_dict(
     fs_mapper,
     tile_path: TilePath,
     masks: Tuple[str, ...] = (),
     revisit: slice = None,
     bands: Tuple[str, ...] = None,
-) -> torch.Tensor:
+) -> Dict[str, np.ndarray]:
+    """Loads a tile path as dictionary where keys are: image, mask_1, ..., mask_n
+
+    Args:
+        fs_mapper (_type_): a file system mapper (can be identity function if local file)
+        tile_path (TilePath): the tile path to load
+        masks (Tuple[str, ...], optional): a tuple of masks to load from zarr storage. Defaults to ().
+        revisit (slice, optional): slice of revisits to load. Defaults to None.
+        bands (Tuple[str, ...], optional): a tuple of bands to load. Defaults to None.
+
+    Returns:
+        Dict[str, np.ndarray]: a dictionary with an "image" key and "mask_1,...mask_n" keys.
+                          and ndarray as values
+    """
     if bands is not None:
         band_common_names = get_band_list(tile_path.constellation)
         band_indices = [band_common_names.index(b) for b in bands]
@@ -155,157 +245,6 @@ def load_tile(
             fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
         )[revisit].astype(np.int8)
         mask_arr = mask_arr[np.newaxis, ...]
-        sample[mask] = torch.as_tensor(mask_arr)
-
-    sample["image"] = torch.as_tensor(arr)
-
+        sample[mask] = mask_arr
+    sample["image"] = arr
     return sample
-
-
-def resize_sample(
-    sample: Union[torch.Tensor, Dict[str, torch.Tensor]],
-    target_size: int = None,
-    interpolation=InterpolationMode.NEAREST,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Resize sample to target
-
-    Args:
-        sample (Union[torch.Tensor, Dict[str, torch.Tensor]]): Can be a tensor or dict of tensors
-        target_size (int, optional): Target size. Defaults to None.
-        interpolation ([type], optional): Only used when sample is torch.Tensor.
-                                          Defaults to InterpolationMode.NEAREST.
-
-    Returns:
-        torch.Tensor: the resampled tensor or dict of tensors
-    """
-    logger.debug(f"Resizing sample to {target_size}")
-    if target_size is not None:
-        if isinstance(sample, dict):
-            resized_sample = {}
-            for key in sample.keys():
-                if key == "image":
-                    resized_sample[key] = resize(
-                        sample[key], target_size, InterpolationMode.BILINEAR
-                    )
-                else:
-                    resized_sample[key] = resize(
-                        sample[key], target_size, InterpolationMode.NEAREST
-                    )
-        elif isinstance(sample, torch.Tensor):
-            resized_sample = resize(sample, target_size, interpolation)
-    return resized_sample
-
-
-def load_tile_and_resize(
-    fs_mapper,
-    tile_path: TilePath,
-    masks,
-    revisit: int = None,
-    bands=None,
-    target_size=None,
-):
-    sample = load_tile(
-        fs_mapper,
-        tile_path,
-        masks=masks,
-        revisit=revisit,
-        bands=bands,
-    )
-    sample = resize_sample(sample, target_size)
-    return sample
-
-
-def predict_tile(
-    tile_path: TilePath,
-    model_name: str,
-    predictor: Any,
-    revisit_chunk_size: int,
-    start_date: str,
-    end_date: str,
-    fs: Any = None,
-    overwrite: bool = False,
-    gpu: int = 0,
-) -> np.ndarray:
-    sdt = np.datetime64(datetime.strptime(start_date, "%Y-%m-%d"))
-    edt = np.datetime64(datetime.strptime(end_date, "%Y-%m-%d"))
-    if fs is not None:
-        fs_mapper = fs.get_mapper
-    else:
-        fs_mapper = identity
-
-    timestamps = zarr.open(fs_mapper(tile_path.timestamps_path), "r")[:]
-    timestamps = np.array(
-        [np.datetime64(datetime.fromisoformat(el)) for el in timestamps],
-    )
-    date_overlap = np.where((timestamps >= sdt) & (timestamps <= edt))[0]
-    min_idx = date_overlap.min()
-    max_idx = date_overlap.max() + 1
-
-    logger.info(f"From overlap with imagery and dates entered: {min_idx=}, {max_idx=}")
-
-    mask_path = f"{tile_path.mask_path}/{model_name}"
-
-    if not overwrite:
-        # check existing masks and only do new ones
-        try:
-            mask_arr = zarr.open_array(fs_mapper(mask_path), "r")
-            prev_max_idx = int(mask_arr.attrs["max_filled"])
-            min_idx = prev_max_idx + 1
-            logger.warning(f"Found {prev_max_idx=}, set {min_idx=}")
-        except ArrayNotFoundError:
-            logger.warning("Set overwrite=False, but there was no existing array")
-        except KeyError:
-            logger.warning(
-                "Set overwrite=False, but attrs['max_filled'] had not been set"
-            )
-
-    if min_idx >= max_idx:
-        logger.warning("min_idx is >= max_idx: nothing to do, skipping")
-        # TODO This should rather return the last date IN the array
-        # Otherwise this will always just be 2100-01-01 or something
-        return end_date, end_date
-
-    if gpu > 0:
-        import torch
-
-        cuda = torch.cuda.is_available()
-        logger.info(f"CUDA available: {cuda}")
-
-    mask_list = []
-    for i in range(min_idx, max_idx, revisit_chunk_size):
-        logger.info(
-            f"creating mask for {tile_path.path}, revisits {i} to "
-            f"{min(i + revisit_chunk_size,max_idx)} of {max_idx}"
-        )
-        revisit_masks = predictor.predict(
-            tile_path,
-            revisit=slice(i, min(i + revisit_chunk_size, max_idx)),
-            fs=fs,
-        )
-        mask_list.append(revisit_masks)
-    masks = np.vstack(mask_list)
-
-    time_shape = timestamps.shape[0]
-    geo_shape = masks.shape[1:]
-    output_shape = (time_shape, *geo_shape)
-
-    logger.info(f"Saving mask to {mask_path}")
-    logger.info(f"Output zarr shape: {output_shape}")
-
-    mask_arr = zarr.open_array(
-        fs_mapper(mask_path),
-        "a",
-        shape=output_shape,
-        chunks=(1, 1000, 1000),
-        dtype=np.uint8,
-    )
-    mask_arr.resize(*output_shape)
-    mask_arr.attrs["max_filled"] = int(max_idx)
-
-    # write data to archive
-    mask_arr[min_idx:max_idx, ...] = masks
-
-    written_start = np.datetime_as_string(timestamps[min_idx], unit="D")
-    written_end = np.datetime_as_string(timestamps[max_idx - 1], unit="D")
-
-    return written_start, written_end

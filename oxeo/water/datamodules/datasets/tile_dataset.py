@@ -9,8 +9,9 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import TilePath, load_tile_and_resize
+from oxeo.core.models.tile import TilePath
 from oxeo.satools.io import strdates_to_datetime
+from oxeo.water.models.tile_utils import load_tile_as_dict_and_resize
 
 from .utils import np_index
 
@@ -38,7 +39,7 @@ class TileDataset(Dataset):
             masks (Iterable[str], optional): Masks to load in the sample (ex: (pekel,cloud_mask)). Defaults to ().
             target_size (int, optional): The target size of the sample. Samples will be rescaled to target. Defaults to None.
             bands (Iterable[str], optional): Bands to load. Defaults to None.
-            cache_dir (str, optional): A cache dir in local disk to store load_tile function. Defaults to None.
+            cache_dir (str, optional): A cache dir in local disk to store load_tile_as_dict function. Defaults to None.
             cache_bytes (int, optional): How many bytes to use as cache in local disk. Defaults to None.
             start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to 0001-01-01.
             end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to 9999-01-01.
@@ -59,9 +60,9 @@ class TileDataset(Dataset):
             mem = Memory(
                 cachedir=cache_dir, verbose=0, mmap_mode="c", bytes_limit=cache_bytes
             )
-            self.load_tile_and_resize = mem.cache(load_tile_and_resize)
+            self.load_tile_as_dict_and_resize = mem.cache(load_tile_as_dict_and_resize)
         else:
-            self.load_tile_and_resize = load_tile_and_resize
+            self.load_tile_as_dict_and_resize = load_tile_as_dict_and_resize
 
         logger.info("Loading all dates for all tiles.")
         self.tile_dates = {
@@ -80,7 +81,7 @@ class TileDataset(Dataset):
     def __getitem__(self, index):
         tile_path, timestamp, i, j, chip_size = index
         timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
-        tile_sample = self.load_tile_and_resize(
+        tile_sample = self.load_tile_as_dict_and_resize(
             self.fs_mapper,
             tile_path,
             self.masks,

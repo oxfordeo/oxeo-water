@@ -11,7 +11,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import load_tile, resize_sample
+from oxeo.core.models.tile import load_tile_as_dict
 from oxeo.core.utils import identity
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
@@ -19,6 +19,7 @@ from oxeo.water.datamodules.constants import (
 )
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models.base import Predictor
+from oxeo.water.models.tile_utils import resize_sample
 
 
 class Segmentation2D(LightningModule):
@@ -167,7 +168,7 @@ class Segmentation2DPredictor(Predictor):
         else:
             fs_mapper = identity
 
-        sample = load_tile(
+        sample = load_tile_as_dict(
             fs_mapper=fs_mapper,
             tile_path=tile_path,
             masks=(),
