@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from functools import lru_cache
 from typing import Tuple
 
 import numpy as np
@@ -20,6 +21,13 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models.base import Predictor
 from oxeo.water.models.tile_utils import resize_sample
+
+
+@lru_cache(maxsize=None)
+def load_model(model_class, **kwargs):
+    model = model_class.load_from_checkpoint(**kwargs)
+    model.eval()
+    return model
 
 
 class Segmentation2D(LightningModule):
@@ -140,9 +148,13 @@ class Segmentation2DPredictor(Predictor):
         target_size: int = 1000,
         **kwargs,
     ):
-        self.model = Segmentation2D.load_from_checkpoint(
-            fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
+        self.model = load_model(
+            Segmentation2D,
+            checkpoint_path=fs.open(ckpt_path),
+            input_channels=input_channels,
+            num_classes=num_classes,
         )
+
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.chip_size = chip_size

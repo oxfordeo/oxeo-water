@@ -1,12 +1,9 @@
-from typing import Any, List
+from typing import Any, Dict, List
 
-import attrs
 from attrs import define
 
 from oxeo.core.models.timeseries import TimeseriesMask, merge_masks_all_constellations
 from oxeo.core.models.waterbody import WaterBody
-from oxeo.water.models.base import Predictor
-from oxeo.water.models.factory import model_factory
 from oxeo.water.models.tile_utils import predict_tile
 
 
@@ -14,21 +11,8 @@ from oxeo.water.models.tile_utils import predict_tile
 class WaterBodyPredictor:
     fs: Any
     model_name: str
+    predictor_kwargs: Dict[str, Any]
     revisit_chunk_size: int
-    ckpt_path: str = attrs.field(default=None)
-    batch_size: int = attrs.field(default=None)
-    bands: list[str] = attrs.field(default=None)
-    target_size: int = attrs.field(default=None)
-    predictor: Predictor = attrs.field(init=False)
-
-    def __attrs_post_init__(self):
-        self.predictor = model_factory(self.model_name).predictor(
-            ckpt_path=self.ckpt_path,
-            fs=self.fs,
-            batch_size=self.batch_size,
-            bands=self.bands,
-            target_size=self.target_size,
-        )
 
     def predict(
         self,
@@ -44,7 +28,7 @@ class WaterBodyPredictor:
             predict_tile(
                 t_path,
                 self.model_name,
-                self.predictor,
+                self.predictor_kwargs,
                 self.revisit_chunk_size,
                 start_date,
                 end_date,

@@ -10,6 +10,7 @@ from zarr.errors import ArrayNotFoundError
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import TilePath, load_tile_as_dict
 from oxeo.core.utils import identity
+from oxeo.water.models.factory import model_factory
 
 
 def resize_sample(
@@ -70,7 +71,7 @@ def load_tile_as_dict_and_resize(
 def predict_tile(
     tile_path: TilePath,
     model_name: str,
-    predictor: Any,
+    predictor_kwargs: Dict[str, Any],
     revisit_chunk_size: int,
     start_date: str,
     end_date: str,
@@ -116,6 +117,9 @@ def predict_tile(
         # TODO This should rather return the last date IN the array
         # Otherwise this will always just be 2100-01-01 or something
         return end_date, end_date
+
+    logger.info("Loading model for prediction.")
+    predictor = model_factory(model_name).predictor(**predictor_kwargs)
 
     if gpu > 0:
         import torch
