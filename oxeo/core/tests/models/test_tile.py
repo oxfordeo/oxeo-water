@@ -13,6 +13,7 @@ def compare_exact(first, second):
 
 
 zeros_zarr_arr = zarr.zeros((2, 4, 10, 10), chunks=(1, 1, 10, 10), dtype="i4")
+small_zeros_zarr_arr = zarr.zeros((2, 4, 5, 5), chunks=(1, 1, 5, 5), dtype="i4")
 zeros_zarr_mask = zarr.zeros((2, 10, 10), chunks=(1, 10, 10), dtype="i4")
 
 sample = {
@@ -81,6 +82,35 @@ def test_tile_from_id_ok(tile_id, expected):
 def test_tile_from_id_error(tile_id, expected):
     with pytest.raises(expected):
         tile.tile_from_id(tile_id)
+
+
+# get_patch_size tests
+
+
+@pytest.mark.parametrize(
+    "tile_paths, expected",
+    [
+        ([sentinel2_tile_path, sentinel2_tile_path], 10),
+    ],
+    ids=["same_patch_size"],
+)
+def test_get_patch_size_ok(mocker, tile_paths, expected):
+    mocker.patch("zarr.open", return_value=zeros_zarr_arr)
+    assert tile.get_patch_size(tile_paths) == expected
+
+
+@pytest.mark.parametrize(
+    "tile_paths, expected",
+    [
+        ([sentinel2_tile_path, landsat8_tile_path], AssertionError),
+        ([], AssertionError),
+    ],
+    ids=["different_patch_size", "empty_paths"],
+)
+def test_get_patch_size_error(mocker, tile_paths, expected):
+    mocker.patch("zarr.open", side_effect=[zeros_zarr_arr, small_zeros_zarr_arr])
+    with pytest.raises(expected):
+        tile.get_patch_size(tile_paths)
 
 
 # get_tile_size tests

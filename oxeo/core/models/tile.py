@@ -127,7 +127,7 @@ def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"
         sizes.append(x)
-    assert len(set(sizes)) == 1, "All sizes must be the same"
+    assert len(set(sizes)) == 1, "All sizes must be the same and not empty."
     return sizes[0]
 
 
