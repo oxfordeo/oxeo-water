@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from functools import lru_cache
 from typing import Tuple
 
 import numpy as np
@@ -140,17 +141,13 @@ class Segmentation2DPredictor(Predictor):
         target_size: int = 1000,
         **kwargs,
     ):
-        self.model = Segmentation2D.load_from_checkpoint(
-            fs.open(ckpt_path), input_channels=input_channels, num_classes=num_classes
-        )
+        self.ckpt_path = ckpt_path
+        self.input_channels = input_channels
+        self.num_classes = num_classes
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.use_cuda = torch.cuda.is_available()
-        if self.use_cuda:
-            self.model.eval().cuda()
-        else:
-            self.model.eval()
         self.bands = bands
         self.transforms = Compose(
             [
@@ -161,6 +158,24 @@ class Segmentation2DPredictor(Predictor):
         )
         self.target_size = target_size
         self.fs = fs
+        self.get_model = self.lazy_load_model()
+
+    def lazy_load_model(self):
+        @lru_cache(maxsize=None)
+        def load_model():
+            logger.info(f"Loading model from path {self.ckpt_path}")
+            model = Segmentation2D.load_from_checkpoint(
+                self.fs.open(self.ckpt_path),
+                input_channels=self.input_channels,
+                num_classes=self.num_classes,
+            )
+            if self.use_cuda:
+                model.eval().cuda()
+            else:
+                model.eval()
+            return model
+
+        return load_model
 
     def predict(self, tile_path, revisit, fs=None):
         if fs is not None:
@@ -200,6 +215,7 @@ class Segmentation2DPredictor(Predictor):
         )
 
         item = {}
+        model = self.get_model()
         for i, patch in enumerate(tqdm(range(0, arr.shape[0], self.batch_size))):
             logger.debug(f"Pred loop {i} of {arr.shape[0]} with {self.batch_size=}")
             tensors = []
@@ -214,7 +230,7 @@ class Segmentation2DPredictor(Predictor):
             tensors = torch.stack(tensors)
             if self.use_cuda:
                 tensors = tensors.cuda()
-            current_pred = self.model(tensors)
+            current_pred = model(tensors)
             del tensors
             current_pred = torch.softmax(current_pred, dim=1)
             current_pred = torch.argmax(current_pred, 1)
