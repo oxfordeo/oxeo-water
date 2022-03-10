@@ -52,7 +52,7 @@ def tile_stat_per_band(
                         revisit=slice(i, i + revisits_batch),
                         bands=bands,
                     )
-                    tile_mean = stat(tile_tensor["image"].numpy(), axis=(2, 3))
+                    tile_mean = stat(tile_tensor["image"], axis=(2, 3))
                     res[constellation].extend(tile_mean.tolist())
             except PathNotFoundError:
                 logger.error("Path {tile_path.data_path} not found.")
