@@ -1,62 +1,27 @@
 import numpy as np
 import pytest
-import zarr
 
 from oxeo.core.models import tile
 from oxeo.core.utils import identity
+
+from .data import (
+    landsat8_tile_path,
+    non_square_tile,
+    one_revisit_sample,
+    sample_without_mask,
+    sentinel2_tile_path,
+    small_zeros_zarr_arr,
+    square_tile,
+    two_bands_sample,
+    zeros_zarr_arr,
+    zeros_zarr_mask,
+)
 
 
 def compare_exact(first, second):
     """Assert whether two dicts of arrays are exactly equal"""
     assert first.keys() == second.keys()
     [np.testing.assert_array_equal(first[key], second[key]) for key in first]
-
-
-zeros_zarr_arr = zarr.zeros((2, 4, 10, 10), chunks=(1, 1, 10, 10), dtype="i4")
-small_zeros_zarr_arr = zarr.zeros((2, 4, 5, 5), chunks=(1, 1, 5, 5), dtype="i4")
-zeros_zarr_mask = zarr.zeros((2, 10, 10), chunks=(1, 10, 10), dtype="i4")
-
-sample = {
-    "image": zeros_zarr_arr[:],
-    "mask": zeros_zarr_mask[:][np.newaxis, ...],
-}
-
-two_bands_sample = {
-    "image": zeros_zarr_arr[:, :2],
-    "mask": zeros_zarr_mask[:][np.newaxis, ...],
-}
-
-one_revisit_sample = {
-    "image": zeros_zarr_arr[:1],
-    "mask": zeros_zarr_mask[:1][np.newaxis, ...],
-}
-
-sample_without_mask = {
-    "image": zeros_zarr_arr[:],
-}
-
-square_tile = tile.Tile(
-    zone=44,
-    row="Q",
-    min_x=780000,
-    min_y=2370000,
-    max_x=790000,
-    max_y=2380000,
-    epsg=32644,
-)
-
-non_square_tile = tile.Tile(
-    zone=44,
-    row="Q",
-    min_x=780000,
-    min_y=2360000,  # changed
-    max_x=790000,
-    max_y=2380000,
-    epsg=32644,
-)
-
-sentinel2_tile_path = tile.TilePath(square_tile, "sentinel-2", "gs://oxeo-water/test")
-landsat8_tile_path = tile.TilePath(square_tile, "landsat-8", "gs://oxeo-water/test")
 
 
 # tile_id tests
@@ -94,7 +59,7 @@ def test_tile_from_id_error(tile_id, expected):
     ],
     ids=["same_patch_size"],
 )
-def test_get_patch_size_ok(mocker, tile_paths, expected):
+def test_get_patch_size_ok(zeros_zarr_arr, mocker, tile_paths, expected):
     mocker.patch("zarr.open", return_value=zeros_zarr_arr)
     assert tile.get_patch_size(tile_paths) == expected
 
