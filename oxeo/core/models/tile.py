@@ -120,9 +120,10 @@ def get_patch_size(patch_paths: List[TilePath]) -> int:  # in pixels
     # TODO: Probably unnecessary to load all patches for this,
     # could just assume they're the same size
     sizes = []
+    logger.info("Checking arr sizes")
     for patch in patch_paths:
         arr_path = f"{patch.path}/data"
-        logger.info(f"Loading to check size {arr_path=}")
+        logger.debug(f"Loading to check size {arr_path=}")
         z = zarr.open(arr_path, "r")
         x, y = z.shape[2:]
         assert x == y, "Must use square patches"

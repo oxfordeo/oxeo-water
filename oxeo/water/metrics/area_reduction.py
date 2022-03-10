@@ -1,3 +1,4 @@
+import datetime
 from typing import List, Optional, Tuple, Union
 from functools import partial
 
@@ -31,13 +32,15 @@ entrypoing: seg_area_all
 def seg_area_all(
     segs: List[TimeseriesMask],
     waterbody: WaterBody,
+    start_date: str = "1980-01-01",
     label_to_mask: int = 1,
 ) -> pd.DataFrame:
     """Create a scalar timeseries for all tiles in a WaterBody and ALL constellations."""
     logger.info(f"seg_area_all; {waterbody.area_id}: calculate metrics")
     geom = waterbody.geometry
     tiles = [tp.tile for tp in waterbody.paths]
-    dfs = [seg_area_single(tsm, tiles, geom, label_to_mask) for tsm in segs]
+    logger.warning(f"seg_area_all; {start_date=}")
+    dfs = [seg_area_single(tsm, tiles, geom, start_date, label_to_mask) for tsm in segs]
     return pd.concat(dfs, axis=0)
 
 
@@ -45,6 +48,7 @@ def seg_area_single(
     tsm: TimeseriesMask,
     tiles: list[Tile],
     geom: Union[Polygon, MultiPolygon],
+    start_date: str = "1980-01-01",
     label_to_mask: int = 1,
 ) -> pd.DataFrame:
     """Calculate scalar timeseries for all tiles in waterbody for a SINGLE constellation."""
@@ -64,7 +68,11 @@ def seg_area_single(
         unit="meter",
         resolution=tsm.resolution,
     )
-    area = tsm.data.groupby("revisits.year").map(masker)
+    logger.info(f"Filtering data to start at {start_date=}")
+    start_date = datetime.date.fromisoformat(start_date)
+    end_date = datetime.date.fromisoformat("2100-01-01")
+    data = tsm.data.sel(revisits=slice(start_date, end_date))
+    area = data.groupby("revisits.year").map(masker)
 
     df = pd.DataFrame(
         data={
@@ -84,7 +92,8 @@ def mask_and_get_area(
     resolution: int,
 ) -> xr.DataArray:
     """Simple wrapper for mask_cube and reduce_to_area."""
-    logger.info(f"Mask and get area for group with {len(data.revisits)=}")
+    year = str(data.revisits.data[0])[:4]
+    logger.info(f"Mask and get area for {year=} with {len(data.revisits)=}")
     data = mask_cube(data, osm_raster, label_to_mask)
     area = reduce_to_area(data, unit, resolution=resolution)
     return area
@@ -100,6 +109,7 @@ def mask_cube(
     # TODO
     # This loops manually because skimage isn't set up for more than 2 dims
     # Should probably use numba here
+    # UPDATE: Not easy to numba such a complex function...
     arr = data[:, 0, ...].compute().data
     all_masks = [
         mask_osm_frame(clean_frame(arr[i, ...], label_to_mask), osm_raster)
