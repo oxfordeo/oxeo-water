@@ -30,7 +30,7 @@ class PekelPredictor(Predictor):
             masks=(),
             revisit=revisit,
         )
-        arr = arr["image"].numpy()
+        arr = arr["image"]
         if "landsat" in tile_path.constellation:
             toa_arrs = []
             for i in range(arr.shape[0]):
