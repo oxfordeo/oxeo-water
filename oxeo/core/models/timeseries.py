@@ -42,6 +42,7 @@ def merge_masks_all_constellations(
                 f"Failed to load {constellation=} on {waterbody.area_id=}, error {e}"
             )
             logger.info("Continuing with other constellations")
+    assert len(mask_list) > 0, f"No constellations were found with mask {mask}"
     return mask_list
 
 
