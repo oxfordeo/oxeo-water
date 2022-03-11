@@ -59,7 +59,7 @@ def test_tile_from_id_error(tile_id, expected):
     ],
     ids=["same_patch_size"],
 )
-def test_get_patch_size_ok(zeros_zarr_arr, mocker, tile_paths, expected):
+def test_get_patch_size_ok(mocker, tile_paths, expected):
     mocker.patch("zarr.open", return_value=zeros_zarr_arr)
     assert tile.get_patch_size(tile_paths) == expected
 

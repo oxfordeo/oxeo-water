@@ -76,11 +76,11 @@ def test_merge_mask_one_constellation_error(waterbody, constellation, mask, expe
 @pytest.mark.slow
 def test_merge_masks_all_constellations_ok(waterbody, victoria_tsm):
     tsms = timeseries.merge_masks_all_constellations(waterbody, "cnn")
-    tsm = tsms[0]
+    constellations = {tsm.constellation for tsm in tsms}
+    resolutions = {tsm.resolution for tsm in tsms}
     assert len(tsms) == 2  # sentinel-2 and landast-8
-    assert tsm.constellation == victoria_tsm.constellation  # compare the landsat one
-    assert tsm.resolution == victoria_tsm.resolution
-    np.testing.assert_array_equal(tsm.data, victoria_tsm.data)
+    assert constellations == {"sentinel-2", "landsat-8"}
+    assert resolutions == {10, 15}
 
 
 @pytest.mark.parametrize(
