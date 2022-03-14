@@ -69,11 +69,17 @@ def seg_area_single(
         resolution=tsm.resolution,
     )
     logger.info(f"Filtering data to start at {start_date=}")
-    #TODO Handle empty array after filtering
     start_date = datetime.date.fromisoformat(start_date)
     end_date = datetime.date.fromisoformat("2100-01-01")
     data = tsm.data.sel(revisits=slice(start_date, end_date))
-    area = data.groupby("revisits.year").map(masker)
+
+    try:
+        year_groups = data.groupby("revisits.year")
+    except ValueError:
+        logger.warning(f"Skipping empty (from filtering?) xarray for {data.shape=}")
+        return pd.DataFrame()
+
+    area = year_groups.map(masker)
 
     df = pd.DataFrame(
         data={
