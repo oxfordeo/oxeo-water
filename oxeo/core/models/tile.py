@@ -249,3 +249,15 @@ def load_tile_as_dict(
         sample[mask] = mask_arr
     sample["image"] = arr
     return sample
+
+
+def tile_to_geom(tile: Union[Tile, str]) -> gpd.GeoDataFrame:
+    """Get the geom for a single tile as a GeoDataFrame."""
+    if isinstance(tile, str):
+        tile = tile_from_id(tile)
+
+    bbox = (tile.min_x, tile.min_y, tile.max_x, tile.max_y)
+    bbox = sentinelhub.BBox(bbox, crs=CRS.from_epsg(tile.epsg))
+    bbox_poly = Polygon(bbox.transform(sentinelhub.CRS.WGS84).get_polygon())
+    bbox_gdf = gpd.GeoDataFrame(geometry=[bbox_poly], crs=CRS.from_epsg(4326))
+    return bbox_gdf
