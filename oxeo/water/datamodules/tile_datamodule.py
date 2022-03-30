@@ -52,6 +52,7 @@ class TileDataModule(LightningDataModule):
         train_end_date: str = "9999-01-01",
         val_start_date: str = "0001-01-01",
         val_end_date: str = "9999-01-01",
+        root_dir: str = "gs://oxeo-water/prod",
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -65,12 +66,12 @@ class TileDataModule(LightningDataModule):
             ]
         )
         self.train_constellation_tile_paths = [
-            TilePath(tile_from_id(tile_id), k)
+            TilePath(tile_from_id(tile_id), k, root_dir)
             for k, v in train_constellation_tile_ids.items()
             for tile_id in v
         ]
         self.val_constellation_tile_paths = [
-            TilePath(tile_from_id(tile_id), k)
+            TilePath(tile_from_id(tile_id), k, root_dir)
             for k, v in val_constellation_tile_ids.items()
             for tile_id in v
         ]

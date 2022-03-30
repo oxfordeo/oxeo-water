@@ -1,15 +1,15 @@
 _target_: oxeo.water.datamodules.tile_datamodule.TileDataModule
 
 train_constellation_tile_ids:
-  sentinel-2: [43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
-  landsat-5: [43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
-  landsat-7: [43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
-  landsat-8: [43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
+  sentinel-2: [] #[43_P_10000_65_138, 43_P_10000_66_137, 43_P_10000_66_138, 43_P_10000_67_137]
+  landsat-5: []
+  landsat-7: []
+  landsat-8: []
 val_constellation_tile_ids:
-  sentinel-2: [43_P_10000_65_137]
-  landsat-5: [43_P_10000_65_137]
-  landsat-7: [43_P_10000_65_137]
-  landsat-8: [43_P_10000_65_137]
+  sentinel-2: []
+  landsat-5: []
+  landsat-7: []
+  landsat-8: []
 train_start_date: "0001-01-01"
 train_end_date: "9999-01-01"
 val_start_date: "0001-01-01"

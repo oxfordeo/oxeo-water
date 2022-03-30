@@ -66,7 +66,7 @@ def extras(config: DictConfig) -> None:
         config (DictConfig): Configuration composed by Hydra.
     """
 
-    log = get_logger(__name__)
+    log = get_logger()
 
     # disable python warnings if <config.ignore_warnings=True>
     if config.get("ignore_warnings"):
