@@ -1,8 +1,11 @@
+from .area_reduction import reduce_to_area, seg_area_all  # noqa
 from .metrics import (  # noqa
-    tile_stat_per_band,
+    accuracy,
+    dice,
+    iou,
+    multiclass_metric,
     pearson,
-)
-from .area_reduction import (  # noqa
-    reduce_to_area,
-    seg_area_all,
+    precision,
+    recall,
+    tile_stat_per_band,
 )

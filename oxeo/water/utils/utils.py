@@ -207,4 +207,4 @@ def plot_imgs_in_row(imgs, labels=("img", "pekel", "cnn"), figsize=(8, 5)):
         img = imgs[i]
         ax[i].imshow(img, vmin=0.0, vmax=1.0, interpolation=None)
         ax[i].axis("off")
-    fig
+    return fig

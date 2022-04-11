@@ -11,8 +11,99 @@ from oxeo.core.logging import logger
 from oxeo.core.models.tile import TilePath, load_tile_as_dict, tile_from_id
 
 
+def precision(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Return the precision of two arrays
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    return np.sum(arr1 * arr2) / np.sum(arr1)
+
+
+def recall(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Return the recall of two arrays
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    return np.sum(arr1 * arr2) / np.sum(arr2)
+
+
 def pearson(x, y):
     return stats.pearsonr(x, y)[0]
+
+
+def accuracy(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Return the accuracy of two arrays
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    return np.sum(arr1 == arr2) / arr1.size
+
+
+def iou(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Return the intersection over union of two arrays
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    intersection = np.sum(arr1 * arr2)
+    union = np.sum(arr1) + np.sum(arr2) - intersection
+    return intersection / union
+
+
+def dice(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Return the dice coefficient of two arrays
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    intersection = np.sum(arr1 * arr2)
+    return 2 * intersection / (np.sum(arr1) + np.sum(arr2))
+
+
+def multiclass_metric(
+    metric: Callable, arr1: np.ndarray, arr2: np.ndarray
+) -> Dict[int, float]:
+    """Return an dict containing the metric for each class in arr1 and arr2
+
+    Args:
+        arr1 (np.ndarray): The first array
+        arr2 (np.ndarray): The second array
+    """
+    assert arr1.shape == arr2.shape, "Arrays must have the same shape"
+    assert arr1.dtype == arr2.dtype, "Arrays must have the same type"
+
+    arr1_classes = np.unique(arr1)
+    arr2_classes = np.unique(arr2)
+    arr_classes = np.union1d(arr1_classes, arr2_classes)
+
+    metric_dict = {}
+    for c in arr_classes:
+        metric_dict[c] = metric(arr1 == c, arr2 == c)
+
+    return metric_dict
 
 
 def tile_stat_per_band(
