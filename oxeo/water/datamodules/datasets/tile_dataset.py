@@ -30,6 +30,7 @@ class TileDataset(Dataset):
         cache_bytes: int = None,
         start_date: str = "0001-01-01",
         end_date: str = "9999-01-01",
+        valid_dates: List[str] = None,
     ):
         """Tile dataset
 
@@ -43,6 +44,7 @@ class TileDataset(Dataset):
             cache_bytes (int, optional): How many bytes to use as cache in local disk. Defaults to None.
             start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to 0001-01-01.
             end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to 9999-01-01.
+            valid_dates (List, optional): A list of valid dates. Only uses the dates in the list. Defaults to None.
         """
         super().__init__()
 
@@ -54,6 +56,7 @@ class TileDataset(Dataset):
         self.bands = tuple(bands)
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
+        self.valid_dates = [datetime.strptime(d, "%Y-%m-%d") for d in valid_dates]
 
         if cache_dir is not None:
             logger.info(f"Using cache_dir {cache_dir}")
@@ -71,11 +74,12 @@ class TileDataset(Dataset):
                 for d in strdates_to_datetime(
                     zarr.open_array(tile_path.timestamps_path)[:]
                 )
-                if (d >= self.start_date) and (d <= self.end_date)
+                if (d >= self.start_date)
+                and (d <= self.end_date)
+                and (d in self.valid_dates)
             ]
             for tile_path in tqdm(self.tile_paths)
         }
-
         self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
 
     def __getitem__(self, index):

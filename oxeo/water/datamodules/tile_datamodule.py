@@ -14,7 +14,7 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 
-from .transforms import ConstellationNormalize, FilterZeros, MasksToLabel
+from .transforms import ConstellationNormalize, MasksToLabel
 from .utils import notnone_collate_fn
 
 
@@ -53,16 +53,17 @@ class TileDataModule(LightningDataModule):
         val_start_date: str = "0001-01-01",
         val_end_date: str = "9999-01-01",
         root_dir: str = "gs://oxeo-water/prod",
+        valid_dates: List[str] = None,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
         self.transforms = Compose(
             [
-                FilterZeros(keys=["pekel", "cloud_mask"], percentage=0.99),
+                # FilterZeros(keys=masks, percentage=0.99),
                 ConstellationNormalize(
                     CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
                 ),
-                MasksToLabel(keys=["pekel", "cloud_mask"]),
+                MasksToLabel(keys=masks),
             ]
         )
         self.train_constellation_tile_paths = [
@@ -79,7 +80,11 @@ class TileDataModule(LightningDataModule):
         self.masks = tuple(masks)
         self.target_size = target_size
         self.chip_size = chip_size
-        self.revisits_per_epoch = revisits_per_epoch
+        self.revisits_per_epoch = (
+            revisits_per_epoch
+            if revisits_per_epoch > len(valid_dates)
+            else len(valid_dates)
+        )
         self.samples_per_revisit = samples_per_revisit
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -90,14 +95,15 @@ class TileDataModule(LightningDataModule):
         self.train_end_date = train_end_date
         self.val_start_date = val_start_date
         self.val_end_date = val_end_date
+        self.valid_dates = valid_dates
 
     def create_dataset(
         self,
         constellation_tile_paths: List[List[TilePath]],
         start_date: str,
         end_date: str,
+        valid_dates: List[str],
     ):
-
         ds = TileDataset(
             constellation_tile_paths,
             transform=self.transforms,
@@ -108,6 +114,7 @@ class TileDataModule(LightningDataModule):
             cache_bytes=self.cache_bytes,
             start_date=start_date,
             end_date=end_date,
+            valid_dates=valid_dates,
         )
 
         return ds
@@ -118,9 +125,13 @@ class TileDataModule(LightningDataModule):
             self.train_constellation_tile_paths,
             self.train_start_date,
             self.train_end_date,
+            self.valid_dates,
         )
         self.val_dataset = self.create_dataset(
-            self.val_constellation_tile_paths, self.val_start_date, self.val_end_date
+            self.val_constellation_tile_paths,
+            self.val_start_date,
+            self.val_end_date,
+            self.valid_dates,
         )
         if self.num_workers == 0:
             self.train_dataset.per_worker_init()
