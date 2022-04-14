@@ -14,7 +14,7 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 
-from .transforms import ConstellationNormalize, MasksToLabel
+from .transforms import ConstellationNormalize, FilterZeros, ZimmozToLabel
 from .utils import notnone_collate_fn
 
 
@@ -59,11 +59,11 @@ class TileDataModule(LightningDataModule):
         self.save_hyperparameters(logger=False)
         self.transforms = Compose(
             [
-                # FilterZeros(keys=masks, percentage=0.99),
+                ZimmozToLabel(),
+                FilterZeros(keys=["label"], percentage=0.99),
                 ConstellationNormalize(
                     CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
                 ),
-                MasksToLabel(keys=masks),
             ]
         )
         self.train_constellation_tile_paths = [
@@ -80,11 +80,8 @@ class TileDataModule(LightningDataModule):
         self.masks = tuple(masks)
         self.target_size = target_size
         self.chip_size = chip_size
-        self.revisits_per_epoch = (
-            revisits_per_epoch
-            if revisits_per_epoch > len(valid_dates)
-            else len(valid_dates)
-        )
+        self.revisits_per_epoch = revisits_per_epoch
+
         self.samples_per_revisit = samples_per_revisit
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -102,7 +99,7 @@ class TileDataModule(LightningDataModule):
         constellation_tile_paths: List[List[TilePath]],
         start_date: str,
         end_date: str,
-        valid_dates: List[str],
+        valid_dates: Dict[str, Dict[str, List[str]]],
     ):
         ds = TileDataset(
             constellation_tile_paths,

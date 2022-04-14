@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 import gcsfs
 import zarr
@@ -30,7 +30,7 @@ class TileDataset(Dataset):
         cache_bytes: int = None,
         start_date: str = "0001-01-01",
         end_date: str = "9999-01-01",
-        valid_dates: List[str] = None,
+        valid_dates: Optional[Dict[str, Dict[str, List[str]]]] = None,
     ):
         """Tile dataset
 
@@ -44,7 +44,7 @@ class TileDataset(Dataset):
             cache_bytes (int, optional): How many bytes to use as cache in local disk. Defaults to None.
             start_date (str, optional): Dataset will use only dates after (and included) start_date (%Y-%m-%d). Defaults to 0001-01-01.
             end_date (str, optional): Dataset will use only dates before (and included) end_date (%Y-%m-%d). Defaults to 9999-01-01.
-            valid_dates (List, optional): A list of valid dates. Only uses the dates in the list. Defaults to None.
+            valid_dates (Optional[Dict[str, Dict[str,List[str]]]], optional): A list of valid dates. Only uses the dates in the list. Defaults to None.
         """
         super().__init__()
 
@@ -56,7 +56,7 @@ class TileDataset(Dataset):
         self.bands = tuple(bands)
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        self.valid_dates = [datetime.strptime(d, "%Y-%m-%d") for d in valid_dates]
+        self.valid_dates = valid_dates
 
         if cache_dir is not None:
             logger.info(f"Using cache_dir {cache_dir}")
@@ -68,23 +68,43 @@ class TileDataset(Dataset):
             self.load_tile_as_dict_and_resize = load_tile_as_dict_and_resize
 
         logger.info("Loading all dates for all tiles.")
-        self.tile_dates = {
+
+        self.all_tile_dates = {
             tile_path: [
                 d
                 for d in strdates_to_datetime(
                     zarr.open_array(tile_path.timestamps_path)[:]
                 )
-                if (d >= self.start_date)
-                and (d <= self.end_date)
-                and (d in self.valid_dates)
             ]
             for tile_path in tqdm(self.tile_paths)
         }
+
+        self.valid_tile_dates = {
+            tile_path: [
+                d
+                for d in self.all_tile_dates[tile_path]
+                if (d in self.get_tile_valid_dates(tile_path))
+            ]
+            for tile_path in tqdm(self.tile_paths)
+        }
+
         self.tiles_ids = [tile_path.tile.id for tile_path in self.tile_paths]
+
+    def get_tile_valid_dates(self, tile_path):
+        if self.valid_dates is None:
+            dates = []
+            for n in range(int((self.end_date - self.start_date).days) + 1):
+                dates.append(self.start_date + datetime.timedelta(n))
+            return dates
+        else:
+            return [
+                datetime.strptime(d, "%Y-%m-%d")
+                for d in self.valid_dates[tile_path.constellation][tile_path.tile.id]
+            ]
 
     def __getitem__(self, index):
         tile_path, timestamp, i, j, chip_size = index
-        timestamp_index = np_index(self.tile_dates[tile_path], timestamp)
+        timestamp_index = np_index(self.all_tile_dates[tile_path], timestamp)
         tile_sample = self.load_tile_as_dict_and_resize(
             self.fs_mapper,
             tile_path,

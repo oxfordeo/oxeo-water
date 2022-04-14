@@ -238,9 +238,9 @@ def load_tile_as_dict(
 
     sample = {}
     arr = zarr.open_array(fs_mapper(tile_path.data_path), mode="r")
-    logger.info(f"{arr.shape=}; {revisit=}, {band_indices=}")
+    logger.debug(f"{arr.shape=}; {revisit=}, {band_indices=}")
     arr = arr.oindex[revisit, band_indices].astype(np.int16)
-    logger.info(f"{arr.shape=}")
+    logger.debug(f"{arr.shape=}")
     for mask in masks:
         mask_arr = zarr.open_array(
             fs_mapper(f"{tile_path.mask_path}/{mask}"), mode="r"
