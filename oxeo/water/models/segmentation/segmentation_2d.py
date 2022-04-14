@@ -164,8 +164,12 @@ class Segmentation2DPredictor(Predictor):
         @lru_cache(maxsize=None)
         def load_model():
             logger.info(f"Loading model from path {self.ckpt_path}")
+            if self.fs is None:
+                ckpt = self.ckpt_path
+            else:
+                self.fs.open(self.ckpt_path)
             model = Segmentation2D.load_from_checkpoint(
-                self.fs.open(self.ckpt_path),
+                ckpt,
                 input_channels=self.input_channels,
                 num_classes=self.num_classes,
             )
@@ -210,7 +214,7 @@ class Segmentation2DPredictor(Predictor):
         block_shape = arr.shape
         arr = np.vstack(arr)  # stack all revisits
         preds = []
-        logger.info(
+        logger.debug(
             f"Starting prediction using batch_size of {self.batch_size} for {revisits} revisits."
         )
 
