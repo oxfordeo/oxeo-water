@@ -14,7 +14,7 @@ from oxeo.water.datamodules.constants import (
 from oxeo.water.datamodules.datasets import TileDataset
 from oxeo.water.datamodules.samplers import RandomSampler
 
-from .transforms import ConstellationNormalize, FilterZeros, ZimmozToLabel
+from .transforms import ConstellationNormalize, FilterZeros, MasksToLabel, ZimmozToLabel
 from .utils import notnone_collate_fn
 
 
@@ -57,9 +57,14 @@ class TileDataModule(LightningDataModule):
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
+
+        if "zimmoz" in masks:
+            to_label_tf = ZimmozToLabel()
+        else:
+            to_label_tf = MasksToLabel(masks)
         self.transforms = Compose(
             [
-                ZimmozToLabel(),
+                to_label_tf,
                 FilterZeros(keys=["label"], percentage=0.99),
                 ConstellationNormalize(
                     CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands

@@ -83,7 +83,10 @@ class TileDataset(Dataset):
             tile_path: [
                 d
                 for d in self.all_tile_dates[tile_path]
-                if (d in self.get_tile_valid_dates(tile_path))
+                if (
+                    (self.get_tile_valid_dates(tile_path) is None)
+                    or (d in self.get_tile_valid_dates(tile_path))
+                )
             ]
             for tile_path in tqdm(self.tile_paths)
         }
@@ -92,10 +95,7 @@ class TileDataset(Dataset):
 
     def get_tile_valid_dates(self, tile_path):
         if self.valid_dates is None:
-            dates = []
-            for n in range(int((self.end_date - self.start_date).days) + 1):
-                dates.append(self.start_date + datetime.timedelta(n))
-            return dates
+            return None
         else:
             return [
                 datetime.strptime(d, "%Y-%m-%d")

@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Tuple
 
 import numpy as np
+import segmentation_models_pytorch as smp
 import torch
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
@@ -22,6 +23,32 @@ from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models.base import Predictor
 from oxeo.water.models.tile_utils import resize_sample
 
+# model = smp.Unet(
+#     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+#     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
+#     in_channels=1,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
+#     classes=3,                      # model output channels (number of classes in your dataset)
+# )
+
+
+class DeepLabSegmentation(LightningModule):
+    def __init__(
+        self,
+        lr: float = 0.01,
+        num_classes: int = 3,
+        input_channels: int = 3,
+        **kwargs,
+    ):
+        super().__init__()
+        self.save_hyperparameters(logger=False)
+        self.num_classes = num_classes
+        self.input_channels = input_channels
+        self.lr = lr
+        self.criterion = CrossEntropyLoss()
+        self.net = smp.DeepLabV3Plus(
+            in_channels=self.input_channes, classes=self.num_classes
+        )
+
 
 class Segmentation2D(LightningModule):
     def __init__(
@@ -29,9 +56,10 @@ class Segmentation2D(LightningModule):
         lr: float = 0.01,
         num_classes: int = 19,
         input_channels: int = 3,
-        num_layers: int = 5,
-        features_start: int = 64,
-        bilinear: bool = False,
+        model_name: str = "unet",
+        # num_layers: int = 5,
+        # features_start: int = 64,
+        # bilinear: bool = False,
         **kwargs,
     ):
         """
@@ -52,18 +80,18 @@ class Segmentation2D(LightningModule):
 
         self.num_classes = num_classes
         self.input_channels = input_channels
-        self.num_layers = num_layers
-        self.features_start = features_start
-        self.bilinear = bilinear
         self.lr = lr
         self.criterion = CrossEntropyLoss()
-        self.net = UNet(
-            num_classes=num_classes,
-            input_channels=input_channels,
-            num_layers=self.num_layers,
-            features_start=self.features_start,
-            bilinear=self.bilinear,
-        )
+        self.model_name = model_name
+        if self.model_name == "unet":
+
+            self.net = UNet(
+                num_classes=num_classes, input_channels=input_channels, **kwargs
+            )
+        elif self.model_name == "deeplab":
+            self.net = smp.DeepLabV3Plus(
+                in_channels=self.input_channels, classes=self.num_classes, **kwargs
+            )
 
     def forward(self, x):
         if len(x.shape) == 5:  # (B, C, T, H, W)
@@ -106,24 +134,6 @@ class Segmentation2D(LightningModule):
             default=0.01,
             help="adam: learning rate",
         )
-        parser.add_argument(
-            "--num_layers",
-            type=int,
-            default=5,
-            help="number of layers on u-net",
-        )
-        parser.add_argument(
-            "--features_start",
-            type=float,
-            default=64,
-            help="number of features in first layer",
-        )
-        parser.add_argument(
-            "--bilinear",
-            action="store_true",
-            default=False,
-            help="whether to use bilinear interpolation or transposed",
-        )
 
         return parser
 
@@ -139,6 +149,7 @@ class Segmentation2DPredictor(Predictor):
         fs=None,
         bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
         target_size: int = 1000,
+        model_name: str = "unet",
         **kwargs,
     ):
         self.ckpt_path = ckpt_path
@@ -158,6 +169,7 @@ class Segmentation2DPredictor(Predictor):
         )
         self.target_size = target_size
         self.fs = fs
+        self.model_name = model_name
         self.get_model = self.lazy_load_model()
 
     def lazy_load_model(self):
@@ -172,6 +184,7 @@ class Segmentation2DPredictor(Predictor):
                 ckpt,
                 input_channels=self.input_channels,
                 num_classes=self.num_classes,
+                model_name=self.model_name,
             )
             if self.use_cuda:
                 model.eval().cuda()
