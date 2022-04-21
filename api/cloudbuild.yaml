@@ -1,0 +1,9 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '.'
+      - '--file=api/Dockerfile'
+      - '--tag=eu.gcr.io/$PROJECT_ID/oxeo-api'
+images:
+  - 'eu.gcr.io/$PROJECT_ID/oxeo-api'

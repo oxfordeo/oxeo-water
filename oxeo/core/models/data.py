@@ -13,7 +13,7 @@ DATE_LATEST = datetime(2200, 1, 1)
 
 
 def fetch_water_list(
-    water_list: tuple[int], engine: sqlalchemy.engine.Engine
+    water_list: list[int], engine: sqlalchemy.engine.Engine
 ) -> list[tuple[int, str, str]]:
     water = table("water", column("area_id"), column("name"), column("geom"))
     with engine.connect() as conn:
@@ -34,3 +34,15 @@ def data2gdf(
     gdf.geometry = gdf.geometry.apply(wkb_hex)
     gdf.crs = CRS.from_epsg(4326)
     return gdf
+
+
+def get_water_geoms(
+    water_list: list[int],
+    db_user: str,
+    db_password: str,
+    db_host: str,
+) -> gpd.GeoDataFrame:
+    """Calls the fetch_water_list and data2gdf in one go."""
+    db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/geom"
+    engine = sqlalchemy.create_engine(db_url)
+    return data2gdf(fetch_water_list(water_list, engine))
