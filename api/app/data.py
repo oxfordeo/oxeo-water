@@ -1,7 +1,9 @@
+from typing import Union
+
 import pandas as pd
 from google.cloud import bigquery
 
-from .models import Lake
+from .models import Lake, PandasValue, PandasTimeSeries
 
 
 def get_timeseries(
@@ -9,7 +11,7 @@ def get_timeseries(
     constellation: str,
     resample: str = "30D",
     for_web: bool = True,
-) -> Lake:
+) -> Union[Lake, PandasTimeSeries]:
     filt_cons = (
         "" if constellation == "all" else f"AND constellation = '{constellation}'"
     )
@@ -43,11 +45,10 @@ def get_timeseries(
             .resample(resample, on="date")
             .mean()
             .reset_index()
-            .assign(date=lambda x: x.date.astype(str))
             .fillna({"area": 0})
             .assign(area=lambda x: x.area.astype(int))
         )
-        return {
+        constellations = {
             constellation: (
                 df.loc[df.constellation == constellation, ["date", "area"]].to_dict(
                     orient="records"
@@ -55,5 +56,6 @@ def get_timeseries(
             )
             for constellation in df.constellation.unique()
         }
+        return Lake(id=area_id, name="", constellations=constellations)
     else:
-        return data
+        return [PandasValue(**d) for d in data]

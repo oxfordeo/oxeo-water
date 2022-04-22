@@ -8,7 +8,7 @@ from oxeo.core.models.data import get_water_geoms
 from oxeo.core.models.tile import get_tiles, tile_to_geom
 
 from .data import get_timeseries
-from .models import Message, Lake, FeatureCollection
+from .models import Message, Lake, FeatureCollection, PandasTimeSeries
 
 app = FastAPI()
 origins = ["*"]
@@ -41,7 +41,7 @@ def get_lake_tile_geoms(area_id: int):
     return geoms.__geo_interface__
 
 
-@app.get("/water/{area_id}/timeseries")
+@app.get("/water/{area_id}/timeseries", response_model=Lake)
 def timeseries(
     area_id: int,
     password: str,
@@ -63,13 +63,13 @@ def timeseries(
     return data
 
 
-@app.get("/water/{area_id}/timeseries_pandas")
+@app.get("/water/{area_id}/timeseries_pandas", response_model=PandasTimeSeries)
 def timeseries_pandas(
     area_id: int,
     password: str,
     constellation: str = "all",
     resample: str = "30D",
-) -> dict[str, list[dict]]:
+) -> PandasTimeSeries:
     """
     Same as `timeseries()` but gets a dict that Pandas can easily ingest.
     """
