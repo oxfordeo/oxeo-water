@@ -9,6 +9,15 @@ class Message(BaseModel):
     message: str = Field(..., example="Health OK!")
 
 
+class HTTPError(BaseModel):
+    detail: str
+
+    class Config:
+        schema_extra = {
+            "example": {"detail": "HTTPException raised."},
+        }
+
+
 class Basin(BaseModel):
     id: int
     ndvi_avg: float

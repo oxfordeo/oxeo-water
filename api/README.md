@@ -11,6 +11,8 @@ pip install -r requirements.txt
 
 Run the API:
 ```bash
+export USERNAME=helsinki
+export PASSWORD=copernicus
 export PG_DB_USER=reader
 export PG_DB_PW=waterandbasinsreadonly
 export PG_DB_HOST=35.204.253.189
