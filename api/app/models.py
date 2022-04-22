@@ -1,5 +1,7 @@
 from typing import Optional, TypeVar, Union
 
+from datetime import date
+
 from pydantic import BaseModel, Field, conlist
 
 
@@ -13,15 +15,32 @@ class Basin(BaseModel):
 
 
 class Value(BaseModel):
-    date: str
+    date: date
     area: float
+
+
+class TimeSeries(BaseModel):
+    __root__: list[Value]
+
+
+class Constellations(BaseModel):
+    __root__: dict[str, TimeSeries]
+
+
+class PandasValue(BaseModel):
+    date: date
+    constellation: str
+    area: float
+
+
+class PandasTimeSeries(BaseModel):
+    __root__: list[PandasValue]
 
 
 class Lake(BaseModel):
     id: int
     name: str
-    area: dict
-    timeseries: list[Value]
+    constellations: Constellations
 
 
 class Asset(BaseModel):
