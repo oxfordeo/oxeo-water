@@ -70,11 +70,22 @@ def health():
 # Replace these with real queries to somewhere
 fake_company = Company(id="123", name="Fake Corp", assets=["mine1", "smelt1"])
 fake_asset1 = Asset(id="mine1", name="Big Copper Mine", lakes=[-9050201])
-fake_asset2 = Asset(id="smelt1", name="Lil Smelter", lakes=[-5867868])
+fake_asset2 = Asset(id="smelt1", name="Lil Smelter", lakes=[-5867868], basins=[453809])
 fake_assets = [fake_asset1, fake_asset2]
 fake_basin1 = Basin(pfaf=453809, ndvi_avg=0.9)
 fake_basin2 = Basin(pfaf=453808, ndvi_avg=0.6)
 fake_basins = [fake_basin1, fake_basin2]
+fake_lake1 = Lake(
+    area_id=-9050201,
+    name="krs",
+    constellations={"s2": [{"date": "2000-01-01", "area": 100}]},
+)
+fake_lake2 = Lake(
+    area_id=-5867868,
+    name="kabini",
+    constellations={"ls8": [{"date": "2000-01-01", "area": 50}]},
+)
+fake_lakes = [fake_lake1, fake_lake2]
 
 
 @app.get("/companies", response_model=list[Company])
@@ -94,7 +105,7 @@ def assets():
 
 @app.get("/asset/{id}", response_model=Asset)
 def asset(id: str):
-    return [a for a in fake_assets if a.id == id][0]
+    return [x for x in fake_assets if x.id == id][0]
 
 
 @app.get("/basins", response_model=list[Basin])
@@ -104,7 +115,17 @@ def basins():
 
 @app.get("/basins/{pfaf}", response_model=Basin)
 def basin(pfaf: int):
-    return [b for b in fake_basins if b.pfaf == pfaf][0]
+    return [x for x in fake_basins if x.pfaf == pfaf][0]
+
+
+@app.get("/lakes", response_model=list[Lake])
+def lakes():
+    return fake_lakes
+
+
+@app.get("/lakes/{area_id}", response_model=Lake)
+def lake(area_id: int):
+    return [x for x in fake_lakes if x.area_id == area_id][0]
 
 
 @app.get(
