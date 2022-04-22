@@ -10,7 +10,16 @@ from oxeo.core.models.data import get_water_geoms
 from oxeo.core.models.tile import get_tiles, tile_to_geom
 
 from .data import get_timeseries
-from .models import Message, Lake, FeatureCollection, PandasTimeSeries, HTTPError
+from .models import (
+    Message,
+    Lake,
+    FeatureCollection,
+    PandasTimeSeries,
+    HTTPError,
+    Company,
+    Asset,
+    Basin,
+)
 
 security = HTTPBasic()
 
@@ -55,6 +64,47 @@ other_responses = {
 @app.get("/healthz", response_model=Message, status_code=status.HTTP_200_OK)
 def health():
     return {"message": "Health OK!"}
+
+
+# TODO
+# Replace these with real queries to somewhere
+fake_company = Company(id="123", name="Fake Corp", assets=["mine1", "smelt1"])
+fake_asset1 = Asset(id="mine1", name="Big Copper Mine", lakes=[-9050201])
+fake_asset2 = Asset(id="smelt1", name="Lil Smelter", lakes=[-5867868])
+fake_assets = [fake_asset1, fake_asset2]
+fake_basin1 = Basin(pfaf=453809, ndvi_avg=0.9)
+fake_basin2 = Basin(pfaf=453808, ndvi_avg=0.6)
+fake_basins = [fake_basin1, fake_basin2]
+
+
+@app.get("/companies", response_model=list[Company])
+def companies():
+    return [fake_company]
+
+
+@app.get("/companies/{id}", response_model=Company)
+def company(id: str):
+    return fake_company
+
+
+@app.get("/assets", response_model=list[Asset])
+def assets():
+    return fake_assets
+
+
+@app.get("/asset/{id}", response_model=Asset)
+def asset(id: str):
+    return [a for a in fake_assets if a.id == id][0]
+
+
+@app.get("/basins", response_model=list[Basin])
+def basins():
+    return fake_basins
+
+
+@app.get("/basins/{pfaf}", response_model=Basin)
+def basin(pfaf: int):
+    return [b for b in fake_basins if b.pfaf == pfaf][0]
 
 
 @app.get(
