@@ -1,14 +1,14 @@
 import os
 
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from oxeo.core.models.data import get_water_geoms
 from oxeo.core.models.tile import get_tiles, tile_to_geom
 
 from .data import get_timeseries
-from .models import Lake
+from .models import Message, Lake, FeatureCollection
 
 app = FastAPI()
 origins = ["*"]
@@ -25,12 +25,12 @@ DB_PW = os.environ.get("PG_DB_PW")
 DB_HOST = os.environ.get("PG_DB_HOST")
 
 
-@app.get("/")
-def test():
-    return "API is running"
+@app.get("/healthz", response_model=Message, status_code=status.HTTP_200_OK)
+def health():
+    return {"message": "Health OK!"}
 
 
-@app.get("/water/{area_id}/tiles/geom")
+@app.get("/water/{area_id}/tiles/geom", response_model=FeatureCollection)
 def get_lake_tile_geoms(area_id: int):
     gdf = get_water_geoms(
         [area_id], db_user=DB_USER, db_password=DB_PW, db_host=DB_HOST
