@@ -5,6 +5,9 @@ from datetime import date
 from pydantic import BaseModel, Field, conlist
 
 
+# Basic HTTP response types
+
+
 class Message(BaseModel):
     message: str = Field(..., example="Health OK!")
 
@@ -18,53 +21,7 @@ class HTTPError(BaseModel):
         }
 
 
-class Basin(BaseModel):
-    id: int
-    ndvi_avg: float
-
-
-class Value(BaseModel):
-    date: date
-    area: float
-
-
-class TimeSeries(BaseModel):
-    __root__: list[Value]
-
-
-class Constellations(BaseModel):
-    __root__: dict[str, TimeSeries]
-
-
-class PandasValue(BaseModel):
-    date: date
-    constellation: str
-    area: float
-
-
-class PandasTimeSeries(BaseModel):
-    __root__: list[PandasValue]
-
-
-class Lake(BaseModel):
-    id: int
-    name: str
-    constellations: Constellations
-
-
-class Asset(BaseModel):
-    name: str
-    id: str
-    materiality: int
-    lakes: list[Lake]
-    basins: list[Basin]
-    geom: dict
-
-
-class Company(BaseModel):
-    name: str
-    assets: list[Asset]
-
+# Geometry types
 
 # The geometry types below borrow heavily from
 # https://github.com/developmentseed/geojson-pydantic
@@ -106,3 +63,53 @@ class FeatureCollection(BaseModel):
     def __getitem__(self, index):
         """get feature at a given index"""
         return self.features[index]
+
+
+# Oxeo-specific types
+
+class Basin(BaseModel):
+    pfaf: int
+    ndvi_avg: float
+
+
+class Value(BaseModel):
+    date: date
+    area: float
+
+
+class TimeSeries(BaseModel):
+    __root__: list[Value]
+
+
+class Constellations(BaseModel):
+    __root__: dict[str, TimeSeries]
+
+
+class PandasValue(BaseModel):
+    date: date
+    constellation: str
+    area: float
+
+
+class PandasTimeSeries(BaseModel):
+    __root__: list[PandasValue]
+
+
+class Lake(BaseModel):
+    area_id: int
+    name: str
+    constellations: Constellations
+
+
+class Asset(BaseModel):
+    id: str
+    name: Optional[str]
+    lakes: Optional[list[int]]
+    basins: Optional[list[int]]
+    geom: Optional[Union[FeatureCollection, Feature, Geometry, Point]]
+
+
+class Company(BaseModel):
+    id: str
+    name: Optional[str]
+    assets: list[str]

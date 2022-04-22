@@ -56,6 +56,6 @@ def get_timeseries(
             )
             for constellation in df.constellation.unique()
         }
-        return Lake(id=area_id, name="", constellations=constellations)
+        return Lake(area_id=area_id, name="", constellations=constellations)
     else:
         return [PandasValue(**d) for d in data]
