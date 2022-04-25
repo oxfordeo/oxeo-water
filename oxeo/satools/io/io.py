@@ -13,7 +13,7 @@ from oxeo.core.logging import logger
 
 
 def strdates_to_datetime(dates: List[str]) -> np.ndarray:
-    return np.array([datetime.fromisoformat(x) for x in sorted(list(dates))])
+    return np.array([datetime.fromisoformat(x[:10]) for x in sorted(list(dates))])
 
 
 def id_f(x):

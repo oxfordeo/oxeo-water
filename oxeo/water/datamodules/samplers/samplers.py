@@ -23,7 +23,7 @@ class RandomSampler(Sampler):
         Returns:
             (tile_index, i, j) coordinates to index a dataset
         """
-        tile_dates = self.dataset.tile_dates
+        tile_dates = self.dataset.valid_tile_dates
         target_size = self.dataset.target_size
 
         unpacked_tile_dates = [
@@ -38,7 +38,6 @@ class RandomSampler(Sampler):
         tile_revisits_to_use = random.choices(
             unpacked_tile_dates, k=self.revisits_per_epoch
         )
-
         logger.debug(f"Tile revisits to use: {tile_revisits_to_use}")
 
         for _ in range(self.length):
@@ -74,8 +73,8 @@ class GridSampler(Sampler):
 
         limit = self.tile_size - self.chip_size
 
-        for tile_id in self.dataset.tile_dates.keys():
-            for timestamp in self.dataset.tile_dates[tile_id]:
+        for tile_id in self.dataset.valid_tile_dates.keys():
+            for timestamp in self.dataset.valid_tile_dates[tile_id]:
                 for i in range(0, self.tile_size, self.chip_size):
                     for j in range(0, self.tile_size, self.chip_size):
                         if i >= limit:

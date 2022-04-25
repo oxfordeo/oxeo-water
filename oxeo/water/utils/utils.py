@@ -66,7 +66,7 @@ def extras(config: DictConfig) -> None:
         config (DictConfig): Configuration composed by Hydra.
     """
 
-    log = get_logger(__name__)
+    log = get_logger()
 
     # disable python warnings if <config.ignore_warnings=True>
     if config.get("ignore_warnings"):
@@ -207,4 +207,4 @@ def plot_imgs_in_row(imgs, labels=("img", "pekel", "cnn"), figsize=(8, 5)):
         img = imgs[i]
         ax[i].imshow(img, vmin=0.0, vmax=1.0, interpolation=None)
         ax[i].axis("off")
-    fig
+    return fig

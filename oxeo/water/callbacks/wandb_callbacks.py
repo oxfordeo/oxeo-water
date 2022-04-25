@@ -277,7 +277,6 @@ class LogImagePredictions(Callback):
             val_samples = next(iter(trainer.datamodule.val_dataloader()))
             val_imgs = val_samples["image"].float()
             val_labels = val_samples["label"]
-
             # run the batch through the network
             val_imgs = val_imgs.to(device=pl_module.device)
 
@@ -307,7 +306,6 @@ class LogImagePredictions(Callback):
                         )
                         for i, x in enumerate(
                             val_imgs[: self.num_samples, [1, 2, 3], :, :]
-
                         )
                     ],
                 },

@@ -16,7 +16,7 @@ defaults:
 
 # name of the run determines folder name in logs
 # it's also accessed by loggers
-name: "unet_semseg_zimmoz"
+name: "deeplab_semseg_hl_tiles"
 
 seed: 12345
 log_level: INFO
@@ -28,12 +28,13 @@ trainer:
   # limit_train_batches: 20
   precision: 16
   gpus: -1
-  resume_from_checkpoint: /home/fran/repos/oxeo-water/oxeo/water/logs/experiments/unet_semseg_all_tiles/runs/2022-01-12/21-21-12/checkpoints/epoch_012.ckpt
+  resume_from_checkpoint: null
 
 model:
   num_classes: 3
   input_channels: 6
-  lr: 1e-5
+  lr: 0.01
+  model_name: "deeplab"
 
 
 datamodule:
@@ -380,22 +381,26 @@ datamodule:
                 '35_J_10000_73_718',
                 '35_L_10000_32_864',
                 '36_L_10000_81_835']
-  masks: [zimmoz]
+
   root_dir: "gs://oxeo-water/prod2"
+  masks: [zimmoz]
   train_start_date: "0001-01-01"
   train_end_date: "9999-01-01"
   val_start_date: "0001-01-02"
   val_end_date: "9999-01-01"
   bands: [nir, red, green, blue, swir1, swir2]
   target_size: 1000
-  chip_size: 256
+  chip_size: 512
   revisits_per_epoch: 20
   samples_per_revisit: 250
-  batch_size: 64
+  batch_size: 32
   num_workers: 6
   pin_memory: False
   cache_dir: "../../cache"
   cache_bytes: 1e11 # a bit less than a 1TB
+
+
+
 
 callbacks:
   log_f1_precision_recall_heatmap: None
@@ -403,4 +408,4 @@ callbacks:
   watch_model: None
   upload_code_as_artifact: None
   early_stopping:
-    patience: 50
+    patience: 20

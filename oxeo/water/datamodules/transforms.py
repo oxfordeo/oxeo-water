@@ -38,6 +38,16 @@ class ConstellationNormalize:
         return sample
 
 
+class ZimmozToLabel:
+    def __call__(self, sample):
+        if sample is None:
+            return sample
+        label = sample["zimmoz"]
+        label[label > 2] = 0
+        sample["label"] = label.squeeze().long()
+        return sample
+
+
 class MasksToLabel:
     """Merge given masks in order given order
     (mask 1 will be label 1, mask 2 will be label 2, etc)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 import torch
@@ -10,6 +10,7 @@ from zarr.errors import ArrayNotFoundError
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import TilePath, load_tile_as_dict
 from oxeo.core.utils import identity
+from oxeo.satools.io import strdates_to_datetime
 
 
 def resize_sample(
@@ -65,6 +66,38 @@ def load_tile_as_dict_and_resize(
     )
     sample = resize_sample(sample, target_size)
     return sample
+
+
+def predict_tile_revisits(
+    tile_path: TilePath,
+    dates: List[str],
+    predictor: Any,
+    fs: Any = None,
+    gpu: int = 0,
+) -> np.ndarray:
+    dates = [datetime.strptime(d, "%Y-%m-%d") for d in dates]
+    if fs is not None:
+        fs_mapper = fs.get_mapper
+    else:
+        fs_mapper = identity
+
+    timestamps = zarr.open(fs_mapper(tile_path.timestamps_path), "r")[:]
+    timestamps = [d for d in strdates_to_datetime(timestamps)]
+
+    date_indices = [timestamps.index(d) for d in dates]
+
+    if gpu > 0:
+        import torch
+
+        cuda = torch.cuda.is_available()
+        logger.info(f"CUDA available: {cuda}")
+
+    revisit_masks = predictor.predict(
+        tile_path,
+        revisit=date_indices,
+        fs=fs,
+    )
+    return revisit_masks
 
 
 def predict_tile(
