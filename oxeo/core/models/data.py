@@ -74,12 +74,6 @@ def get_aoi_from_stac_catalog(
     items = catalog.search(**search_params).get_all_items()
     stack = stackstac.stack(items)
 
-    start_y = stack.y[-1].values
-    start_x = stack.x[0].values
-
-    m_y_chunk_size = stack.chunksizes["y"][0] * stack.resolution
-    m_x_chunk_size = stack.chunksizes["x"][0] * stack.resolution
-
     min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
         search_params["bbox"][0], search_params["bbox"][1]
     )
@@ -87,32 +81,28 @@ def get_aoi_from_stac_catalog(
         search_params["bbox"][2], search_params["bbox"][3]
     )
 
-    offset_y_top = (max_y_utm - start_y) % m_y_chunk_size
-    offset_y_bottom = m_y_chunk_size - offset_y_top
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
 
-    offset_x_left = (min_x_utm - start_x) % m_x_chunk_size
-    offset_x_right = m_x_chunk_size - offset_x_left
+    # Sometimes the aoi chunksize is not correctly aligned with the original chunksize.
+    # So we add an offset if needed comparing the original
+    # chunk size to the new aoi chunk size.
+    # We add a buffer in meters to y_top, y_bottom, x_left and x_right.
 
+    m_buffer_y_top = (
+        stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
+    ) * stack.resolution
+    m_buffer_y_bottom = (
+        stack.chunksizes["y"][0] - aoi.chunksizes["y"][-1]
+    ) * stack.resolution
+    m_buffer_x_left = (
+        stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
+    ) * stack.resolution
+    m_buffer_x_right = (
+        stack.chunksizes["x"][0] - aoi.chunksizes["x"][-1]
+    ) * stack.resolution
     aoi = stack.loc[
         ...,
-        max_y_utm + offset_y_top : min_y_utm - offset_y_bottom,
-        min_x_utm - offset_x_left : max_x_utm + offset_x_right,
+        max_y_utm + m_buffer_y_top : min_y_utm - m_buffer_y_bottom,
+        min_x_utm - m_buffer_x_left : max_x_utm + m_buffer_x_right,
     ]
-    # Sometimes the chunksize is not correctly aligned because of the utm projection.
-    # So we check add and add an offset if needed.
-    if (
-        aoi.chunksizes["y"][0] != stack.chunksizes["y"][0]
-        or aoi.chunksizes["x"][0] != stack.chunksizes["x"][0]
-    ):
-        m_buffer_y = (
-            stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
-        ) * stack.resolution
-        m_buffer_x = (
-            stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
-        ) * stack.resolution
-        aoi = stack.loc[
-            ...,
-            max_y_utm + offset_y_top + m_buffer_y : min_y_utm - offset_y_bottom,
-            min_x_utm - offset_x_left - m_buffer_x : max_x_utm + offset_x_right,
-        ]
     return aoi
