@@ -1,6 +1,6 @@
 from datetime import datetime
 from functools import partial
-from typing import Union
+from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import pyproj
@@ -14,15 +14,15 @@ from sqlalchemy import column, table
 from sqlalchemy.sql import select
 
 SearchParamValue = Union[str, list, int, float]
-SearchParams = dict[str, SearchParamValue]
+SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
 
 
 def fetch_water_list(
-    water_list: list[int], engine: sqlalchemy.engine.Engine
-) -> list[tuple[int, str, str]]:
+    water_list: List[int], engine: sqlalchemy.engine.Engine
+) -> List[Tuple[int, str, str]]:
     water = table("water", column("area_id"), column("name"), column("geom"))
     with engine.connect() as conn:
         s = select(
@@ -35,7 +35,7 @@ def fetch_water_list(
 
 
 def data2gdf(
-    data: list[tuple[int, str, str]],
+    data: List[Tuple[int, str, str]],
 ) -> gpd.GeoDataFrame:
     wkb_hex = partial(wkb.loads, hex=True)
     gdf = gpd.GeoDataFrame(data, columns=["area_id", "name", "geometry"])
@@ -45,7 +45,7 @@ def data2gdf(
 
 
 def get_water_geoms(
-    water_list: list[int],
+    water_list: List[int],
     db_user: str,
     db_password: str,
     db_host: str,

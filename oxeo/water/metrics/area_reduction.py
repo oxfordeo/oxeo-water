@@ -1,22 +1,3 @@
-import datetime
-from typing import List, Optional, Tuple, Union
-from functools import partial
-
-import dask.array as da
-import geopandas as gpd
-import numpy as np
-import pandas as pd
-import xarray as xr
-from pyproj import CRS
-from rasterio import features, transform
-from satextractor.models import Tile
-from shapely.geometry import MultiPolygon, Polygon
-from skimage import morphology
-
-from oxeo.core.logging import logger
-from oxeo.core.models.timeseries import TimeseriesMask
-from oxeo.core.models.waterbody import WaterBody
-
 """
 The computational graph of this module is as follows:
 
@@ -27,6 +8,24 @@ entrypoing: seg_area_all
 - - - first calls mask_cube, which calls clean_frame and mask_osm_frame
 - - - then calls reduce_to_area, which returns a scalar that bubbles up
 """
+import datetime
+from functools import partial
+from typing import List, Optional, Tuple, Union
+
+import dask.array as da
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import xarray as xr
+from pyproj import CRS
+from rasterio import features, transform
+from shapely.geometry import MultiPolygon, Polygon
+from skimage import morphology
+
+from oxeo.core.logging import logger
+from oxeo.core.models.tile import Tile
+from oxeo.core.models.timeseries import TimeseriesMask
+from oxeo.core.models.waterbody import WaterBody
 
 
 def seg_area_all(
@@ -46,7 +45,7 @@ def seg_area_all(
 
 def seg_area_single(
     tsm: TimeseriesMask,
-    tiles: list[Tile],
+    tiles: List[Tile],
     geom: Union[Polygon, MultiPolygon],
     start_date: str = "1980-01-01",
     label_to_mask: int = 1,

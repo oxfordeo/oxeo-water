@@ -17,9 +17,9 @@ class WaterBody:
 
 def get_waterbodies(
     gdf: gpd.GeoDataFrame,
-    constellations: list[str],
+    constellations: List[str],
     root_dir: str = "gs://oxeo-water/prod",
-) -> list[WaterBody]:
+) -> List[WaterBody]:
     waterbodies = []
     for water in gdf.to_dict(orient="records"):
         tiles = get_tiles(water["geometry"])
