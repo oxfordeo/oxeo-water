@@ -72,7 +72,7 @@ def get_aoi_from_stac_catalog(
     """
     catalog = pystac_client.Client.open(catalog_url)
     items = catalog.search(**search_params).get_all_items()
-    stack = stackstac.stack(items)
+    stack = stackstac.stack(items, resolution=10)
 
     min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
         search_params["bbox"][0], search_params["bbox"][1]

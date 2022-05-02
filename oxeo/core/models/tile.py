@@ -215,29 +215,29 @@ def load_tile_from_stac_as_dict(
     collections: List[str],
     tile: Tile,
     revisit: slice = None,
-    bands: Tuple[str, ...] = None,
+    bands: List[str] = None,
 ) -> Dict[str, np.ndarray]:
     """Load a tile from a STAC catalog and return it as a dict.
     Args:
         catalog_url (str): The url of the STAC catalog
         tile (Tile): The tile to load
         revisit (slice): The slice of the catalog to load
-        bands (Tuple[str, ...]): The bands to load
+        bands (List[str]): The bands to load
     Returns:
         dict: The tile as a dict
     """
     search_params = {
-        "bbox": f"{tile.min_x},{tile.min_y},{tile.max_x},{tile.max_y}",
+        "bbox": tile.bbox_wgs84,
         "collections": collections,
+        # "datetime":"2020-04-01/2020-05-01"
     }
 
     aoi = get_aoi_from_stac_catalog(
-        catalog_url=catalog_url, search_params=search_params
+        catalog_url=catalog_url, search_params=search_params,
     )
-
-    aoi = aoi.sel(bands=bands).isel(time=revisit)
+    aoi = aoi.sel(band=bands).isel(time=revisit)
     sample = {}
-    sample["image"] = aoi.values()
+    sample["image"] = aoi.values
     return sample
 
 
