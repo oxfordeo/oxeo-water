@@ -57,7 +57,7 @@ def get_water_geoms(
 
 
 def get_aoi_from_stac_catalog(
-    catalog_url: str, search_params: SearchParams
+    catalog_url: str, search_params: SearchParams, chunk_aligned: bool = False
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
@@ -66,13 +66,14 @@ def get_aoi_from_stac_catalog(
         catalog_url (str): the catalog url
         search_params (SearchParams): the search params to be used by pystac_client search.
                     It is mandatory that the search_params contain the 'bbox' key (min_x, min_y, max_x, max_y)
+        chunk_aligned (bool): if True the data is chunk aligned
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
     catalog = pystac_client.Client.open(catalog_url)
     items = catalog.search(**search_params).get_all_items()
-    stack = stackstac.stack(items, resolution=10)
+    stack = stackstac.stack(items)
 
     min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
         search_params["bbox"][0], search_params["bbox"][1]
@@ -87,22 +88,22 @@ def get_aoi_from_stac_catalog(
     # So we add an offset if needed comparing the original
     # chunk size to the new aoi chunk size.
     # We add a buffer in meters to y_top, y_bottom, x_left and x_right.
-
-    m_buffer_y_top = (
-        stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
-    ) * stack.resolution
-    m_buffer_y_bottom = (
-        stack.chunksizes["y"][0] - aoi.chunksizes["y"][-1]
-    ) * stack.resolution
-    m_buffer_x_left = (
-        stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
-    ) * stack.resolution
-    m_buffer_x_right = (
-        stack.chunksizes["x"][0] - aoi.chunksizes["x"][-1]
-    ) * stack.resolution
-    aoi = stack.loc[
-        ...,
-        max_y_utm + m_buffer_y_top : min_y_utm - m_buffer_y_bottom,
-        min_x_utm - m_buffer_x_left : max_x_utm + m_buffer_x_right,
-    ]
+    if chunk_aligned:
+        m_buffer_y_top = (
+            stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
+        ) * stack.resolution
+        m_buffer_y_bottom = (
+            stack.chunksizes["y"][0] - aoi.chunksizes["y"][-1]
+        ) * stack.resolution
+        m_buffer_x_left = (
+            stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
+        ) * stack.resolution
+        m_buffer_x_right = (
+            stack.chunksizes["x"][0] - aoi.chunksizes["x"][-1]
+        ) * stack.resolution
+        aoi = stack.loc[
+            ...,
+            max_y_utm + m_buffer_y_top : min_y_utm - m_buffer_y_bottom,
+            min_x_utm - m_buffer_x_left : max_x_utm + m_buffer_x_right,
+        ]
     return aoi

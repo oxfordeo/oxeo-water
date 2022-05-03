@@ -216,6 +216,7 @@ def load_tile_from_stac_as_dict(
     tile: Tile,
     revisit: slice = None,
     bands: List[str] = None,
+    chunk_aligned: bool = False,
 ) -> Dict[str, np.ndarray]:
     """Load a tile from a STAC catalog and return it as a dict.
     Args:
@@ -223,17 +224,19 @@ def load_tile_from_stac_as_dict(
         tile (Tile): The tile to load
         revisit (slice): The slice of the catalog to load
         bands (List[str]): The bands to load
+        chunk_aligned (bool): if True the data is chunk aligned
     Returns:
         dict: The tile as a dict
     """
     search_params = {
         "bbox": tile.bbox_wgs84,
         "collections": collections,
-        # "datetime":"2020-04-01/2020-05-01"
     }
 
     aoi = get_aoi_from_stac_catalog(
-        catalog_url=catalog_url, search_params=search_params,
+        catalog_url=catalog_url,
+        search_params=search_params,
+        chunk_aligned=chunk_aligned,
     )
     aoi = aoi.sel(band=bands).isel(time=revisit)
     sample = {}
