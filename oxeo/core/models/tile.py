@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
@@ -217,6 +217,7 @@ def load_tile_from_stac_as_dict(
     revisit: slice = None,
     bands: List[str] = None,
     chunk_aligned: bool = False,
+    resolution: Optional[int] = None,
 ) -> Dict[str, np.ndarray]:
     """Load a tile from a STAC catalog and return it as a dict.
     Args:
@@ -225,6 +226,7 @@ def load_tile_from_stac_as_dict(
         revisit (slice): The slice of the catalog to load
         bands (List[str]): The bands to load
         chunk_aligned (bool): if True the data is chunk aligned
+        resolution (Optional[int]): The resolution of the data. If it cannot be infered by stac
     Returns:
         dict: The tile as a dict
     """
@@ -237,6 +239,7 @@ def load_tile_from_stac_as_dict(
         catalog_url=catalog_url,
         search_params=search_params,
         chunk_aligned=chunk_aligned,
+        resolution=resolution,
     )
     aoi = aoi.sel(band=bands).isel(time=revisit)
     sample = {}

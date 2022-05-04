@@ -1,6 +1,6 @@
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import geopandas as gpd
 import pyproj
@@ -57,7 +57,10 @@ def get_water_geoms(
 
 
 def get_aoi_from_stac_catalog(
-    catalog_url: str, search_params: SearchParams, chunk_aligned: bool = False
+    catalog_url: str,
+    search_params: SearchParams,
+    chunk_aligned: bool = False,
+    resolution: Optional[int] = None,
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
@@ -67,13 +70,14 @@ def get_aoi_from_stac_catalog(
         search_params (SearchParams): the search params to be used by pystac_client search.
                     It is mandatory that the search_params contain the 'bbox' key (min_x, min_y, max_x, max_y)
         chunk_aligned (bool): if True the data is chunk aligned
+        resolution (Optional[int]): The resolution of the data. If it cannot be infered by stac
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
     catalog = pystac_client.Client.open(catalog_url)
     items = catalog.search(**search_params).get_all_items()
-    stack = stackstac.stack(items)
+    stack = stackstac.stack(items, resolution=resolution)
 
     min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
         search_params["bbox"][0], search_params["bbox"][1]
