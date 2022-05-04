@@ -194,6 +194,11 @@ class Segmentation2DPredictor(Predictor):
 
         return load_model
 
+    def predict_stac(
+        self, catalog_url, collections, geojson, datetime, revisit, fs=None
+    ):
+        pass
+
     def predict(self, tile_path, revisit, fs=None):
         if fs is not None:
             fs_mapper = fs.get_mapper

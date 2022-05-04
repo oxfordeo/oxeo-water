@@ -1,5 +1,6 @@
 import numpy as np
-from satextractor.models.constellation_info import BAND_INFO
+
+from oxeo.core.constants import BAND_INFO
 
 from .mtl_parser import parsemeta
 

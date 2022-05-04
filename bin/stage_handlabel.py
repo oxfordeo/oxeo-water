@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from google.cloud import storage
-from satextractor.models import constellation_info
 from torchvision.transforms import Compose
 
+from oxeo.core import constants
 from oxeo.satools.io import ConstellationData, create_index_map
 from oxeo.water.datamodules import ConstellationDataModule
 from oxeo.water.datamodules import transforms as oxtransforms
@@ -93,7 +93,7 @@ def swipe_labeller_fn(
         data[kk] = dict(
             data=ConstellationData(
                 kk,
-                bands=list(constellation_info.SENTINEL2_BAND_INFO.keys()),
+                bands=list(constants.SENTINEL2_BAND_INFO.keys()),
                 paths=all_paths[kk],
                 height=1000,
                 width=1000,

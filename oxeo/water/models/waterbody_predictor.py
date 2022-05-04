@@ -17,7 +17,7 @@ class WaterBodyPredictor:
     revisit_chunk_size: int
     ckpt_path: str = attrs.field(default=None)
     batch_size: int = attrs.field(default=None)
-    bands: list[str] = attrs.field(default=None)
+    bands: List[str] = attrs.field(default=None)
     target_size: int = attrs.field(default=None)
     predictor: Predictor = attrs.field(init=False)
 

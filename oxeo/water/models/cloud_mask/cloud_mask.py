@@ -6,9 +6,9 @@ from attr import define
 from joblib import Parallel, delayed
 from pymasker import LandsatConfidence, LandsatMasker
 from s2cloudless import S2PixelCloudDetector
-from satextractor.models.constellation_info import BAND_INFO
 from tqdm import tqdm
 
+from oxeo.core.constants import BAND_INFO
 from oxeo.water.models.base import Predictor
 from oxeo.water.utils import tqdm_joblib
 

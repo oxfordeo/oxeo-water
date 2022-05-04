@@ -1,20 +1,28 @@
 from datetime import datetime
 from functools import partial
+from typing import Dict, List, Optional, Tuple, Union
 
 import geopandas as gpd
+import pyproj
+import pystac_client
 import sqlalchemy
+import stackstac
+import xarray as xr
 from pyproj import CRS
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
+
+SearchParamValue = Union[str, list, int, float]
+SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
 
 
 def fetch_water_list(
-    water_list: list[int], engine: sqlalchemy.engine.Engine
-) -> list[tuple[int, str, str]]:
+    water_list: List[int], engine: sqlalchemy.engine.Engine
+) -> List[Tuple[int, str, str]]:
     water = table("water", column("area_id"), column("name"), column("geom"))
     with engine.connect() as conn:
         s = select(
@@ -27,7 +35,7 @@ def fetch_water_list(
 
 
 def data2gdf(
-    data: list[tuple[int, str, str]],
+    data: List[Tuple[int, str, str]],
 ) -> gpd.GeoDataFrame:
     wkb_hex = partial(wkb.loads, hex=True)
     gdf = gpd.GeoDataFrame(data, columns=["area_id", "name", "geometry"])
@@ -37,7 +45,7 @@ def data2gdf(
 
 
 def get_water_geoms(
-    water_list: list[int],
+    water_list: List[int],
     db_user: str,
     db_password: str,
     db_host: str,
@@ -46,3 +54,60 @@ def get_water_geoms(
     db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/geom"
     engine = sqlalchemy.create_engine(db_url)
     return data2gdf(fetch_water_list(water_list, engine))
+
+
+def get_aoi_from_stac_catalog(
+    catalog_url: str,
+    search_params: SearchParams,
+    chunk_aligned: bool = False,
+    resolution: Optional[int] = None,
+) -> xr.DataArray:
+    """Get an aoi from a stac catalog using the search params.
+    If the aoi is not chunk aligned an offset will be added.
+
+    Args:
+        catalog_url (str): the catalog url
+        search_params (SearchParams): the search params to be used by pystac_client search.
+                    It is mandatory that the search_params contain the 'bbox' key (min_x, min_y, max_x, max_y)
+        chunk_aligned (bool): if True the data is chunk aligned
+        resolution (Optional[int]): The resolution of the data. If it cannot be infered by stac
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+    catalog = pystac_client.Client.open(catalog_url)
+    items = catalog.search(**search_params).get_all_items()
+    stack = stackstac.stack(items, resolution=resolution)
+
+    min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
+        search_params["bbox"][0], search_params["bbox"][1]
+    )
+    max_x_utm, max_y_utm = pyproj.Proj(stack.crs)(
+        search_params["bbox"][2], search_params["bbox"][3]
+    )
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
+
+    # Sometimes the aoi chunksize is not correctly aligned with the original chunksize.
+    # So we add an offset if needed comparing the original
+    # chunk size to the new aoi chunk size.
+    # We add a buffer in meters to y_top, y_bottom, x_left and x_right.
+    if chunk_aligned:
+        m_buffer_y_top = (
+            stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
+        ) * stack.resolution
+        m_buffer_y_bottom = (
+            stack.chunksizes["y"][0] - aoi.chunksizes["y"][-1]
+        ) * stack.resolution
+        m_buffer_x_left = (
+            stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
+        ) * stack.resolution
+        m_buffer_x_right = (
+            stack.chunksizes["x"][0] - aoi.chunksizes["x"][-1]
+        ) * stack.resolution
+        aoi = stack.loc[
+            ...,
+            max_y_utm + m_buffer_y_top : min_y_utm - m_buffer_y_bottom,
+            min_x_utm - m_buffer_x_left : max_x_utm + m_buffer_x_right,
+        ]
+    return aoi

@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
@@ -9,6 +9,7 @@ from pyproj import CRS
 from shapely.geometry import MultiPolygon, Polygon
 
 from oxeo.core.logging import logger
+from oxeo.core.models.data import get_aoi_from_stac_catalog
 from oxeo.core.utils import get_band_list, get_transform_function
 
 
@@ -188,7 +189,7 @@ def split_region_in_utm_tiles(
 
 def get_tiles(
     geom: Union[Polygon, MultiPolygon, gpd.GeoSeries, gpd.GeoDataFrame]
-) -> list[Tile]:
+) -> List[Tile]:
     try:
         geom = geom.unary_union
     except AttributeError:
@@ -198,15 +199,52 @@ def get_tiles(
 
 def get_all_paths(
     gdf: gpd.GeoDataFrame,
-    constellations: list[str],
+    constellations: List[str],
     root_dir: str = "gs://oxeo-water/prod",
-) -> list[TilePath]:
+) -> List[TilePath]:
     all_tiles = get_tiles(gdf)
     all_tilepaths = make_paths(all_tiles, constellations, root_dir)
     logger.info(
         f"All tiles for the supplied geometry: {[t.path for t in all_tilepaths]}"
     )
     return all_tilepaths
+
+
+def load_tile_from_stac_as_dict(
+    catalog_url: str,
+    collections: List[str],
+    tile: Tile,
+    revisit: slice = None,
+    bands: List[str] = None,
+    chunk_aligned: bool = False,
+    resolution: Optional[int] = None,
+) -> Dict[str, np.ndarray]:
+    """Load a tile from a STAC catalog and return it as a dict.
+    Args:
+        catalog_url (str): The url of the STAC catalog
+        tile (Tile): The tile to load
+        revisit (slice): The slice of the catalog to load
+        bands (List[str]): The bands to load
+        chunk_aligned (bool): if True the data is chunk aligned
+        resolution (Optional[int]): The resolution of the data. If it cannot be infered by stac
+    Returns:
+        dict: The tile as a dict
+    """
+    search_params = {
+        "bbox": tile.bbox_wgs84,
+        "collections": collections,
+    }
+
+    aoi = get_aoi_from_stac_catalog(
+        catalog_url=catalog_url,
+        search_params=search_params,
+        chunk_aligned=chunk_aligned,
+        resolution=resolution,
+    )
+    aoi = aoi.sel(band=bands).isel(time=revisit)
+    sample = {}
+    sample["image"] = aoi.values
+    return sample
 
 
 def load_tile_as_dict(
