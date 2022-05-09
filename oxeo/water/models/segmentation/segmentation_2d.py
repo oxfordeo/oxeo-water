@@ -13,7 +13,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import load_tile_as_dict
+from oxeo.core.models.tile import load_tile_as_dict, load_tile_from_stac_as_dict
 from oxeo.core.utils import identity
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
@@ -194,24 +194,30 @@ class Segmentation2DPredictor(Predictor):
 
         return load_model
 
-    def predict_stac(
-        self, catalog_url, collections, geojson, datetime, revisit, fs=None
-    ):
-        pass
-
-    def predict(self, tile_path, revisit, fs=None):
+    def predict(self, tile_path, revisit, fs=None, use_stac=False, stac_kwargs=None):
         if fs is not None:
             fs_mapper = fs.get_mapper
         else:
             fs_mapper = identity
 
-        sample = load_tile_as_dict(
-            fs_mapper=fs_mapper,
-            tile_path=tile_path,
-            masks=(),
-            revisit=revisit,
-            bands=self.bands,
-        )
+        if use_stac:
+            sample = load_tile_from_stac_as_dict(
+                catalog_url=stac_kwargs["catalog_url"],
+                collections=stac_kwargs["collections"],
+                tile=tile_path.tile,
+                revisit=revisit,
+                bands=self.bands,
+                chunk_aligned=False,
+                resolution=None,
+            )
+        else:
+            sample = load_tile_as_dict(
+                fs_mapper=fs_mapper,
+                tile_path=tile_path,
+                masks=(),
+                revisit=revisit,
+                bands=self.bands,
+            )
         original_shape = sample["image"].shape
         sample = resize_sample(
             sample,
