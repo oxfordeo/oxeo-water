@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from functools import lru_cache
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import segmentation_models_pytorch as smp
@@ -12,8 +12,14 @@ from torch.nn import CrossEntropyLoss
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
+from oxeo.core.constants import RESOLUTION_INFO
 from oxeo.core.logging import logger
-from oxeo.core.models.tile import load_tile_as_dict, load_tile_from_stac_as_dict
+from oxeo.core.models.tile import (
+    TilePath,
+    load_aoi_from_stac_as_dict,
+    load_tile_as_dict,
+    load_tile_from_stac_as_dict,
+)
 from oxeo.core.utils import identity
 from oxeo.water.datamodules.constants import (
     CONSTELLATION_BAND_MEAN,
@@ -21,7 +27,7 @@ from oxeo.water.datamodules.constants import (
 )
 from oxeo.water.datamodules.transforms import ConstellationNormalize
 from oxeo.water.models.base import Predictor
-from oxeo.water.models.tile_utils import resize_sample
+from oxeo.water.models.tile_utils import pad_sample, resize_sample
 
 # model = smp.Unet(
 #     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
@@ -148,7 +154,7 @@ class Segmentation2DPredictor(Predictor):
         chip_size: int = 250,
         fs=None,
         bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
-        target_size: int = 1000,
+        target_resolution: int = 10,
         model_name: str = "unet",
         **kwargs,
     ):
@@ -167,7 +173,7 @@ class Segmentation2DPredictor(Predictor):
                 ),
             ]
         )
-        self.target_size = target_size
+        self.target_resolution = target_resolution
         self.fs = fs
         self.model_name = model_name
         self.get_model = self.lazy_load_model()
@@ -194,7 +200,109 @@ class Segmentation2DPredictor(Predictor):
 
         return load_model
 
-    def predict(self, tile_path, revisit, fs=None, use_stac=False, stac_kwargs=None):
+    def predict_stac_aoi(
+        self,
+        catalog_url=None,
+        collections=None,
+        constellation=None,
+        bbox: List[int] = None,
+        revisit=None,
+        chunk_aligned: bool = False,
+    ):
+        search_params = {"bbox": bbox, "collections": collections}
+        sample = load_aoi_from_stac_as_dict(
+            catalog_url=catalog_url,
+            search_params=search_params,
+            bands=self.bands,
+            revisit=revisit,
+            chunk_aligned=chunk_aligned,
+        )
+        sample = resize_sample(
+            sample,
+            sample_resolution=RESOLUTION_INFO[constellation],
+            target_resolution=self.target_resolution,
+        )
+        resampled_shape = sample["image"].shape
+        sample = pad_sample(sample, pad_to=self.chip_size)
+
+        input = sample["image"].numpy()
+
+        revisits = input.shape[0]
+        bands = input.shape[1]
+        H = input.shape[2]
+        W = input.shape[3]
+
+        arr = (
+            view_as_blocks(input, (revisits, bands, self.chip_size, self.chip_size))
+            .reshape(-1, revisits, bands, self.chip_size, self.chip_size)
+            .astype(np.int16)
+        )
+        block_shape = arr.shape
+        arr = np.vstack(arr)  # stack all revisits
+        preds = []
+        logger.debug(
+            f"Starting prediction using batch_size of {self.batch_size} for {revisits} revisits."
+        )
+
+        item = {}
+        model = self.get_model()
+        for i, patch in enumerate(tqdm(range(0, arr.shape[0], self.batch_size))):
+            logger.debug(f"Pred loop {i} of {arr.shape[0]} with {self.batch_size=}")
+            tensors = []
+            input_tensor = torch.as_tensor(
+                arr[patch : patch + self.batch_size], dtype=torch.int16
+            )
+            for t in input_tensor:
+                item["image"] = t
+                item["constellation"] = constellation
+                item = self.transforms(item)
+                tensors.append(item["image"])
+            tensors = torch.stack(tensors)
+            if self.use_cuda:
+                tensors = tensors.cuda()
+            current_pred = model(tensors)
+            del tensors
+            current_pred = torch.softmax(current_pred, dim=1)
+            current_pred = torch.argmax(current_pred, 1)
+            current_pred = current_pred.data.type(torch.uint8)
+            if self.use_cuda:
+                current_pred = current_pred.cpu()
+            current_pred = current_pred.numpy()
+            preds.extend(current_pred)
+        preds = np.array(preds)
+
+        preds = preds.reshape(
+            (block_shape[0], block_shape[1], self.chip_size, self.chip_size)
+        )
+
+        preds = preds.reshape(
+            (
+                block_shape[0],
+                block_shape[1],
+                self.chip_size,
+                self.chip_size,
+            ),
+            order="F",
+        )
+        preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
+        # remove the pad used for predictions:
+        preds = preds[..., : resampled_shape[-2], : resampled_shape[-1]]
+        # resize to original size
+        preds = resize_sample(
+            torch.as_tensor(preds),
+            sample_resolution=self.target_resolution,
+            target_resolution=RESOLUTION_INFO[constellation],
+        )
+        return preds.numpy()
+
+    def predict(
+        self,
+        tile_path: TilePath = None,
+        revisit=None,
+        fs=None,
+        use_stac=False,
+        stac_kwargs=None,
+    ):
         if fs is not None:
             fs_mapper = fs.get_mapper
         else:
@@ -218,13 +326,16 @@ class Segmentation2DPredictor(Predictor):
                 revisit=revisit,
                 bands=self.bands,
             )
-        original_shape = sample["image"].shape
         sample = resize_sample(
             sample,
-            target_size=self.target_size,
+            sample_resolution=RESOLUTION_INFO[tile_path.constellation],
+            target_resolution=self.target_resolution,
         )
+        resampled_shape = sample["image"].shape
+        sample = pad_sample(sample, pad_to=self.chip_size)
 
         input = sample["image"].numpy()
+
         revisits = input.shape[0]
         bands = input.shape[1]
         H = input.shape[2]
@@ -283,7 +394,14 @@ class Segmentation2DPredictor(Predictor):
             order="F",
         )
         preds = reconstruct_from_patches(preds, revisits, self.chip_size, H, W)
-        preds = resize_sample(torch.as_tensor(preds), original_shape[-1])
+        # remove the pad used for predictions:
+        preds = preds[..., : resampled_shape[-2], : resampled_shape[-1]]
+        # resize to original size
+        preds = resize_sample(
+            torch.as_tensor(preds),
+            sample_resolution=self.target_resolution,
+            target_resolution=RESOLUTION_INFO[tile_path.constellation],
+        )
         return preds.numpy()
 
 

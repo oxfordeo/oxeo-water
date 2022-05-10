@@ -408,3 +408,10 @@ BAND_INFO = {
     "landsat-8": LANDSAT8_BAND_INFO,
     "sentinel-1": SENTINEL1_BAND_INFO,
 }
+
+RESOLUTION_INFO = {
+    "sentinel-2": 10,
+    "landsat-5": 60,
+    "landsat-7": 30,
+    "landsat-8": 30,
+}
