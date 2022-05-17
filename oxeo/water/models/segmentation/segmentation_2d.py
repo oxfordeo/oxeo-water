@@ -204,12 +204,13 @@ class Segmentation2DPredictor(Predictor):
         self,
         catalog_url=None,
         collections=None,
+        datetime=None,
         constellation=None,
         bbox: List[int] = None,
         revisit=None,
         chunk_aligned: bool = False,
     ):
-        search_params = {"bbox": bbox, "collections": collections}
+        search_params = {"bbox": bbox, "collections": collections, "datetime": datetime}
         sample = load_aoi_from_stac_as_dict(
             catalog_url=catalog_url,
             search_params=search_params,

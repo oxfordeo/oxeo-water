@@ -1,5 +1,12 @@
+from typing import List
+
 import networkx as nx
 import xarray as xa
+from gremlin_python.process.graph_traversal import GraphTraversalSource, __
+from gremlin_python.process.traversal import Cardinality, Column, T
+
+g_id = T.id
+single = Cardinality.single
 
 NODE_SCHEMA = {
     "time": None,
@@ -27,6 +34,49 @@ NODE_SCHEMA = {
     "bbox": None,
     "res_level": None,
 }
+
+
+def add_revisit(
+    g: GraphTraversalSource, parent_node: str, v_properties: dict, timestamp: str
+):
+    add_node_to_graph(g, "revisit", v_properties)
+    g.V(parent_node).addE("has").to(g.V(v_properties["id"]).next()).property(
+        "timestamp", timestamp
+    ).next()
+
+
+def add_node_to_graph(g: GraphTraversalSource, vlabel: str, properties: dict):
+    v_id = properties["id"]
+    g.addV(vlabel).property(T.id, v_id).next()
+
+    for k, v in properties.items():
+        if isinstance(v, list):
+            for e in v:
+                g.V(v_id).property(k, e).next()
+        else:
+            g.V(v_id).property(single, k, v).next()
+
+
+def add_nodes_to_graph(g: GraphTraversalSource, entity: str, nodes: List[dict]):
+    """Add given nodes to graph
+
+    Args:
+        g (GraphTraversalSource): the graph
+        entity: (str): The entity of the nodes to add
+        nodes (dict): A list of dict containing node properties
+
+    Returns:
+        GraphTraversalSource:  The graph
+    """
+    single_cardinality = {k: v for k, v in nodes.items() if not isinstance(v, list)}
+    g.inject(single_cardinality).unfold().as_(entity).addV(entity).as_("v").sideEffect(
+        __.select(entity)
+        .unfold()
+        .as_("kv")
+        .select("v")
+        .property(__.select("kv").by(Column.keys), __.select("kv").by(Column.values))
+    ).iterate()
+    return g
 
 
 def stackstac_xa_coords_to_dict(
