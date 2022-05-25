@@ -1,3 +1,4 @@
+import datetime
 from typing import List
 
 import networkx as nx
@@ -36,13 +37,58 @@ NODE_SCHEMA = {
 }
 
 
-def add_revisit(
-    g: GraphTraversalSource, parent_node: str, v_properties: dict, timestamp: str
+def add_edge_to_graph(
+    g: GraphTraversalSource, label: str, from_id: str, to_id: str, e_properties: dict
 ):
-    add_node_to_graph(g, "revisit", v_properties)
-    g.V(parent_node).addE("has").to(g.V(v_properties["id"]).next()).property(
-        "timestamp", timestamp
-    ).next()
+    new_edge = g.V(from_id).add_e(label).to(g.V(to_id).next())
+    for k, v in e_properties.items():
+        if isinstance(v, list):
+            for e in v:
+                new_edge = new_edge.property(k, e)
+        else:
+            new_edge = new_edge.property(single, k, v)
+    new_edge.next()
+
+
+def add_revisit(
+    g: GraphTraversalSource,
+    constellation_node_id: str,
+    aoi_node_id: str,
+    v_properties: dict,
+    timestamp: datetime.datetime,
+):
+
+    # Create a Transaction.
+    tx = g.tx()
+
+    # Spawn a new GraphTraversalSource, binding all traversals established from it to tx.
+    gtx = tx.begin()
+
+    try:
+        # Execute a traversal within the transaction.
+        add_node_to_graph(gtx, "revisit", v_properties)
+        add_edge_to_graph(
+            gtx,
+            "captures",
+            constellation_node_id,
+            v_properties["id"],
+            {"timestamp": timestamp},
+        )
+        add_edge_to_graph(gtx, "on", v_properties["id"], aoi_node_id, {})
+        tx.commit()
+    except Exception as e:
+        # Rollback the transaction if an error occurs.
+        print("Transaction failed: ", e)
+        tx.rollback()
+
+
+# def add_revisit(
+#     g: GraphTraversalSource, parent_node: str, v_properties: dict, timestamp: str
+# ):
+#     add_node_to_graph(g, "revisit", v_properties)
+#     g.V(parent_node).addE("has").to(g.V(v_properties["id"]).next()).property(
+#         "timestamp", timestamp
+#     ).next()
 
 
 def add_node_to_graph(g: GraphTraversalSource, vlabel: str, properties: dict):
