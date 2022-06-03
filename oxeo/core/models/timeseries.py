@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import xarray as xr
@@ -8,6 +9,40 @@ from oxeo.core.logging import logger
 from oxeo.core.models.tile import TilePath, get_patch_size, get_tile_size
 from oxeo.core.models.waterbody import WaterBody
 from oxeo.satools.io import ConstellationData, constellation_dataarray
+
+
+def build_revisit_timestream_entry(
+    aoi_id: str,
+    res_level: float,
+    cloud_coverage: float,
+    ts: datetime,
+) -> dict:
+    return {
+        "Dimensions": [{"Name": "aoi_id", "Value": aoi_id}],
+        "MeasureName": "metrics",
+        "MeasureValues": [
+            {"Name": "res_level", "Value": str(res_level), "Type": "DOUBLE"},
+            {"Name": "cloud_coverage", "Value": str(cloud_coverage), "Type": "DOUBLE"},
+        ],
+        "MeasureValueType": "MULTI",
+        "Time": str(int(ts.timestamp() * 1000)),
+    }
+
+
+def write_records(
+    writer,
+    db_name: str,
+    table_name: str,
+    records: list,
+    common_attrs: dict,
+):
+    result = writer.write_records(
+        DatabaseName=db_name,
+        TableName=table_name,
+        Records=records,
+        CommonAttributes=common_attrs,
+    )
+    return result
 
 
 @define
