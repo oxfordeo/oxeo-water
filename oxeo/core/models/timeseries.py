@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List
 
 import xarray as xr
@@ -13,19 +12,23 @@ from oxeo.satools.io import ConstellationData, constellation_dataarray
 
 def build_revisit_timestream_entry(
     aoi_id: str,
+    constellation: str,
     res_level: float,
     cloud_coverage: float,
-    ts: datetime,
+    ts: int,  # ts in milliseconds
 ) -> dict:
     return {
-        "Dimensions": [{"Name": "aoi_id", "Value": aoi_id}],
+        "Dimensions": [
+            {"Name": "aoi_id", "Value": aoi_id},
+            {"Name": "constellation", "Value": constellation},
+        ],
         "MeasureName": "metrics",
         "MeasureValues": [
             {"Name": "res_level", "Value": str(res_level), "Type": "DOUBLE"},
             {"Name": "cloud_coverage", "Value": str(cloud_coverage), "Type": "DOUBLE"},
         ],
         "MeasureValueType": "MULTI",
-        "Time": str(int(ts.timestamp() * 1000)),
+        "Time": str(ts),
     }
 
 
