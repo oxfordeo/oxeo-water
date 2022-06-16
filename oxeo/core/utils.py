@@ -1,6 +1,8 @@
 import functools
 from typing import List
 
+import geojson
+import numpy as np
 import pyproj
 
 from oxeo.core.constants import BAND_INFO
@@ -8,6 +10,16 @@ from oxeo.core.constants import BAND_INFO
 
 def identity(x):
     return x
+
+
+def get_bounding_box(geometry):
+    coords = np.array(list(geojson.utils.coords(geometry)))
+    return (
+        coords[:, 0].min(),
+        coords[:, 1].min(),
+        coords[:, 0].max(),
+        coords[:, 1].max(),
+    )
 
 
 @functools.lru_cache(maxsize=5)

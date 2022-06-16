@@ -210,6 +210,43 @@ def get_all_paths(
     return all_tilepaths
 
 
+def load_aoi_from_stac_as_dict(
+    catalog_url: str,
+    search_params: dict,
+    bands: List[str],
+    revisit: slice = None,
+    chunk_aligned: bool = False,
+    resolution: Optional[int] = None,
+    median: bool = False,
+) -> dict:
+    """Load aoi from stac catalog as a dict.
+
+    Args:
+        catalog_url (str): The url of the stac catalog
+        search_params (dict): The search parameters to use by pystac_client
+        bands (List[str]): The bands to load
+        revisit (Optional[slice]): The slice in time dim to load
+        chunk_aligned (bool, optional): If the resuling array is chunk aligned with original source. Defaults to False.
+        resolution (Optional[int], optional): Constellation resolution. Defaults to None.
+        median (bool): If the resuling array is medianed in time. Defaults to False.
+    Returns:
+        dict: The aoi as a dict in the "image" key.
+    """
+
+    aoi = get_aoi_from_stac_catalog(
+        catalog_url=catalog_url,
+        search_params=search_params,
+        chunk_aligned=chunk_aligned,
+        resolution=resolution,
+    )
+    aoi = aoi.sel(band=bands).isel(time=revisit)
+    if median:
+        aoi = aoi.median(dim="time")
+    sample = {}
+    sample["image"] = aoi.values
+    return sample
+
+
 def load_tile_from_stac_as_dict(
     catalog_url: str,
     collections: List[str],
@@ -234,16 +271,14 @@ def load_tile_from_stac_as_dict(
         "bbox": tile.bbox_wgs84,
         "collections": collections,
     }
-
-    aoi = get_aoi_from_stac_catalog(
+    sample = load_aoi_from_stac_as_dict(
         catalog_url=catalog_url,
         search_params=search_params,
+        bands=bands,
+        revisit=revisit,
         chunk_aligned=chunk_aligned,
         resolution=resolution,
     )
-    aoi = aoi.sel(band=bands).isel(time=revisit)
-    sample = {}
-    sample["image"] = aoi.values
     return sample
 
 

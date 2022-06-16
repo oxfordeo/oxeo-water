@@ -7,45 +7,100 @@ import zarr
 from torchvision.transforms.functional import InterpolationMode, resize
 from zarr.errors import ArrayNotFoundError
 
+from oxeo.core.constants import RESOLUTION_INFO
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import TilePath, load_tile_as_dict
 from oxeo.core.utils import identity
 from oxeo.satools.io import strdates_to_datetime
 
 
+def pad_sample(
+    sample: Union[torch.Tensor, Dict[str, Union[torch.Tensor, np.ndarray]]],
+    pad_to: int = None,
+) -> Union[torch.Tensor, Dict[str, Union[torch.Tensor, np.ndarray]]]:
+    """Pad sample to target
+    Args:
+        sample (Union[torch.Tensor, Dict[str, torch.Tensor]]): Can be a tensor or dict of tensors
+        pad_to (int): The the final size will be a multiplier of this number.
+    Returns:
+        torch.Tensor: the resampled tensor or dict of tensors
+    """
+
+    if isinstance(sample, dict):
+        for key in sample.keys():
+            pad_top = abs(sample[key].shape[-2] % -pad_to)
+            pad_right = abs(sample[key].shape[-1] % -pad_to)
+            sample[key] = torch.nn.functional.pad(
+                sample[key], pad=(0, pad_right, 0, pad_top)
+            )
+    elif isinstance(sample, torch.Tensor):
+        pad_top = abs(sample.shape[-2] % -pad_to)
+        pad_right = abs(sample.shape[-1] % -pad_to)
+        sample = torch.nn.functional.pad(sample, pad=(0, pad_right, 0, pad_top))
+    return sample
+
+
+def get_target_size(
+    sample: torch.Tensor, sample_resolution: int, target_resolution
+) -> int:
+    """Get target size for resampling a sample to a target resolution
+    Args:
+        sample (torch.Tensor): The sample to be resampled
+        sample_resolution (int): The resolution of the sample
+        target_resolution (int): The resolution to which the sample should be resampled
+    Returns:
+        int: The target size
+    """
+    min_edge = min(sample.shape[-2:])
+    if sample_resolution != target_resolution:
+        if sample_resolution > target_resolution:
+            target_size = min_edge * (sample_resolution / target_resolution / 2)
+        else:
+            target_size = min_edge * (sample_resolution / target_resolution) * 2
+    else:
+        target_size = min_edge
+    return target_size
+
+
 def resize_sample(
     sample: Union[torch.Tensor, Dict[str, Union[torch.Tensor, np.ndarray]]],
-    target_size: int = None,
+    sample_resolution: int = RESOLUTION_INFO["sentinel-2"],
+    target_resolution: int = RESOLUTION_INFO["sentinel-2"],
     interpolation=InterpolationMode.NEAREST,
 ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
     """Resize sample to target
     Args:
         sample (Union[torch.Tensor, Dict[str, torch.Tensor]]): Can be a tensor or dict of tensors
-        target_size (int, optional): Target size. Defaults to None.
+        sample_resolution (int): The sample resolution.
+        target_resolution (int): The target resolution.
         interpolation ([type], optional): Only used when sample is torch.Tensor.
                                           Defaults to InterpolationMode.NEAREST.
     Returns:
         torch.Tensor: the resampled tensor or dict of tensors
     """
-    logger.debug(f"Resizing sample to {target_size}")
-    if target_size is not None:
-        if isinstance(sample, dict):
-            resized_sample = {}
-            for key in sample.keys():
-                if key == "image":
-                    resized_sample[key] = resize(
-                        torch.as_tensor(sample[key]),
-                        target_size,
-                        InterpolationMode.BILINEAR,
-                    )
-                else:
-                    resized_sample[key] = resize(
-                        torch.as_tensor(sample[key]),
-                        target_size,
-                        InterpolationMode.NEAREST,
-                    )
-        elif isinstance(sample, torch.Tensor):
-            resized_sample = resize(sample, target_size, interpolation)
+
+    if isinstance(sample, dict):
+        resized_sample = {}
+        for key in sample.keys():
+            target_size = get_target_size(
+                sample[key], sample_resolution, target_resolution
+            )
+            if key == "image":
+                resized_sample[key] = resize(
+                    torch.as_tensor(sample[key]),
+                    target_size,
+                    InterpolationMode.BILINEAR,
+                )
+
+            else:
+                resized_sample[key] = resize(
+                    torch.as_tensor(sample[key]),
+                    target_size,
+                    InterpolationMode.NEAREST,
+                )
+    elif isinstance(sample, torch.Tensor):
+        target_size = get_target_size(sample, sample_resolution, target_resolution)
+        resized_sample = resize(sample, target_size, interpolation)
     return resized_sample
 
 

@@ -10,6 +10,44 @@ from oxeo.core.models.waterbody import WaterBody
 from oxeo.satools.io import ConstellationData, constellation_dataarray
 
 
+def build_revisit_timestream_entry(
+    aoi_id: str,
+    constellation: str,
+    res_level: float,
+    cloud_coverage: float,
+    ts: int,  # ts in milliseconds
+) -> dict:
+    return {
+        "Dimensions": [
+            {"Name": "aoi_id", "Value": aoi_id},
+            {"Name": "constellation", "Value": constellation},
+        ],
+        "MeasureName": "metrics",
+        "MeasureValues": [
+            {"Name": "res_level", "Value": str(res_level), "Type": "DOUBLE"},
+            {"Name": "cloud_coverage", "Value": str(cloud_coverage), "Type": "DOUBLE"},
+        ],
+        "MeasureValueType": "MULTI",
+        "Time": str(ts),
+    }
+
+
+def write_records(
+    writer,
+    db_name: str,
+    table_name: str,
+    records: list,
+    common_attrs: dict,
+):
+    result = writer.write_records(
+        DatabaseName=db_name,
+        TableName=table_name,
+        Records=records,
+        CommonAttributes=common_attrs,
+    )
+    return result
+
+
 @define
 class TimeseriesMask:
     data: xr.DataArray  # TxBxHxW
