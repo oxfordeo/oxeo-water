@@ -1,14 +1,19 @@
+import csv
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Union
 
 import geopandas as gpd
+import pandas as pd
 import pyproj
 import pystac_client
+import rasterio
+import requests
 import sqlalchemy
 import stackstac
 import xarray as xr
 from pyproj import CRS
+from rasterio.windows import Window
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
@@ -18,6 +23,83 @@ SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
+
+
+class CusotomSentinel1Reader:
+    """Custom Sentinel 1 reader to avoid errors with stackstac"""
+
+    def __init__(self, url, **kwargs):
+        self.url = url
+
+    def read(self, window: Window, **kwargs):
+        with rasterio.open(self.url) as src:
+            result = src.read(window=window, masked=True, **kwargs)
+
+        return result
+
+
+def query_asf(
+    platform: str = "Sentinel-1A,Sentinel-1B",
+    processing_level: str = "GRD_HD",
+    beam_mode: str = "IW",
+    intersects_with_wkt: str = None,
+    start: str = None,
+    end: str = None,
+) -> pd.DataFrame:
+    """Query asf for S1 data.
+
+    Args:
+        platform (str, optional): The platform to query. Defaults to "Sentinel-1A,Sentinel-1B".
+        processing_level (str, optional): SLC, RAW or GRD_HD. Defaults to "GRD_HD".
+        beam_mode (str, optional): S1 beam mode. Defaults to "IW".
+        intersects_with_wkt (str, optional): POLYGON in wkt. Defaults to None.
+        start (str, optional): start date. Defaults to None.
+        end (str, optional): end date. Defaults to None.
+
+    Returns:
+        _type_: DataFrame containing asf query results .
+    """
+    params = dict(
+        output="csv",
+        platform=platform,
+        processingLevel=processing_level,
+        beamMode=beam_mode,
+        intersectsWith=intersects_with_wkt,
+        start=start,
+        end=end,
+    )
+    asf_baseurl = "https://api.daac.asf.alaska.edu/services/search/param?"
+    for k, v in params.items():
+        asf_baseurl = asf_baseurl + f"{k}={v}&"
+    r = requests.post(asf_baseurl)
+    reader = csv.DictReader(r.text.splitlines())
+    rows = list(reader)
+    df = pd.DataFrame(rows)
+    return df
+
+
+def asf_granule_to_aws(asf_query_row: pd.Series) -> str:
+    """Converts asf query result row to aws s3 path url for the same granule.
+
+    Args:
+        asf_query_row (pd.Series): resulting row from asf query.
+
+    Returns:
+        str: the s3 path url
+    """
+    date = asf_query_row["Acquisition Date"]
+    year = date[:4]
+    month = int(date[5:7])
+    day = int(date[8:10])
+    platform = asf_query_row["Granule Name"][:3]
+    beam_mode = asf_query_row["Beam Mode"]
+    polarization = asf_query_row["GroupID"][6:8]
+    granule_split = asf_query_row["Granule Name"].split("_")[4:]
+    start_date = granule_split[0]
+    end_date = granule_split[1]
+
+    product_id = "_".join(granule_split[2:])
+    return f"s3://sentinel-s1-l1c/GRD/{year}/{month}/{day}/{beam_mode}/{polarization}/{platform}_IW_GRDH_1S{polarization}_{start_date}_{end_date}_{product_id}"
 
 
 def fetch_water_list(

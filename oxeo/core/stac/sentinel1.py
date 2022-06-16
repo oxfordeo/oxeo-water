@@ -1,5 +1,4 @@
 import logging
-import os
 
 import pystac
 from pystac.extensions.eo import EOExtension
@@ -93,7 +92,7 @@ def create_item(granule_href: str) -> pystac.Item:
     image_assets = dict(
         [
             image_asset_from_href(
-                os.path.join(granule_href, "measurement", image_path),
+                image_path,
                 item,
             )
             for image_path in product_metadata.image_paths
