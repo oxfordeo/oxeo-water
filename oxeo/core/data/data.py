@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import geopandas as gpd
 import pandas as pd
 import pyproj
+import pystac
 import pystac_client
 import rasterio
 import requests
@@ -14,9 +15,12 @@ import stackstac
 import xarray as xr
 from pyproj import CRS
 from rasterio.windows import Window
+from sentinelhub import DataCollection, SentinelHubCatalog
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
+
+from oxeo.core.stac import sentinel1
 
 SearchParamValue = Union[str, list, int, float]
 SearchParams = Dict[str, SearchParamValue]
@@ -136,6 +140,41 @@ def get_water_geoms(
     db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/geom"
     engine = sqlalchemy.create_engine(db_url)
     return data2gdf(fetch_water_list(water_list, engine))
+
+
+def get_aoi_from_s1_shub_catalog(
+    shub_catalog: SentinelHubCatalog,
+    search_params: SearchParams,
+) -> xr.DataArray:
+    """Get an aoi from sentinel 1 shub catalog using the search params.
+    If the aoi is not chunk aligned an offset will be added.
+
+    Args:
+        shub_catalog (SentinelHubCatalog): the catalog object, ex: catalog = SentinelHubCatalog(config=config)
+        search_params (SearchParams): the search params to be used by pystac_client search.
+                    It is mandatory that the search_params contain a 'bbox' key containing
+                    a  shub BBox object
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+
+    search_iterator = shub_catalog.search(DataCollection.SENTINEL1, **search_params)
+
+    items = []
+    for res in search_iterator:
+        items.append(sentinel1.create_item(res["assets"]["s3"]["href"]))
+    items = pystac.ItemCollection(items)
+
+    stack = stackstac.stack(items, reader=CusotomSentinel1Reader)
+
+    min_x, min_y = search_params["bbox"].min_x, search_params["bbox"].min_y
+
+    max_x, max_y = search_params["bbox"].max_x, search_params["bbox"].max_y
+
+    aoi = stack.loc[..., max_y:min_y, min_x:max_x]
+
+    return aoi
 
 
 def get_aoi_from_stac_catalog(
