@@ -20,7 +20,8 @@ from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
 
-from oxeo.core.stac import sentinel1
+from oxeo.core.logging import logger
+from oxeo.core.stac import landsat, sentinel1
 
 SearchParamValue = Union[str, list, int, float]
 SearchParams = Dict[str, SearchParamValue]
@@ -140,6 +141,58 @@ def get_water_geoms(
     db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:5432/geom"
     engine = sqlalchemy.create_engine(db_url)
     return data2gdf(fetch_water_list(water_list, engine))
+
+
+def get_aoi_from_landsat_shub_catalog(
+    shub_catalog: SentinelHubCatalog,
+    data_collection: DataCollection,
+    search_params: SearchParams,
+    category: str = "T1",
+) -> xr.DataArray:
+    """Get an aoi from landsat shub catalog using the search params.
+    If the aoi is not chunk aligned an offset will be added.
+
+    Args:
+        shub_catalog (SentinelHubCatalog): the catalog object, ex: catalog = SentinelHubCatalog(config=config)
+        data_collection (DataCollection): the enum defining which landsat to use. ex: DataCollection.LANDSAT_ETM_L1
+        search_params (SearchParams): the search params to be used by pystac_client search.
+                    It is mandatory that the search_params contain a 'bbox' key containing
+                    a  shub BBox object
+        category (str): Tier level "RAW", "T1", "T2"
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+
+    search_iterator = shub_catalog.search(data_collection, **search_params)
+    processing_level = data_collection.processing_level
+    items = []
+    for res in search_iterator:
+        try:
+            if res["properties"]["landsat:collection_category"] == category:
+                base_url = res["assets"]["data"]["href"]
+                asset_id = base_url.split("/")[-1]
+                if processing_level == "L1":
+                    asset_id = asset_id.replace("_SR", "")
+                mtl_url = f"{base_url}/{asset_id}_MTL.xml"
+                items.append(landsat.create_stac_item(mtl_url))
+        except FileNotFoundError:
+            logger.warning(f"File {mtl_url} not found in s3 catalog.")
+
+    items = pystac.ItemCollection(items)
+
+    stack = stackstac.stack(items)
+
+    min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
+        search_params["bbox"].min_x, search_params["bbox"].min_y
+    )
+    max_x_utm, max_y_utm = pyproj.Proj(stack.crs)(
+        search_params["bbox"].max_x, search_params["bbox"].max_y
+    )
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
+
+    return aoi
 
 
 def get_aoi_from_s1_shub_catalog(
