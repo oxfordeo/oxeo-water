@@ -7,6 +7,7 @@ from pystac.extensions.eo import Band
 from pystac.link import Link
 
 USWEST_URL = "https://services-uswest2.sentinel-hub.com"
+ELEMENT84_URL = "https://earth-search.aws.element84.com/v0"
 INSPIRE_METADATA_ASSET_KEY = "inspire-metadata"
 SAFE_MANIFEST_ASSET_KEY = "safe-manifest"
 PRODUCT_METADATA_ASSET_KEY = "product-metadata"

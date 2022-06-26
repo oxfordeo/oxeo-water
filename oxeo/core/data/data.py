@@ -1,24 +1,37 @@
 import csv
+import warnings
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import pandas as pd
-import pyproj
 import pystac
 import pystac_client
 import rasterio
+import rasterio as rio
 import requests
 import sqlalchemy
 import stackstac
 import xarray as xr
 from pyproj import CRS
+from rasterio.vrt import WarpedVRT
 from rasterio.windows import Window
-from sentinelhub import DataCollection, SentinelHubCatalog
+from sentinelhub import BBox, DataCollection, SentinelHubCatalog
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
+from stackstac.nodata_reader import NodataReader, exception_matches
+from stackstac.rio_reader import (
+    MULTITHREADED_DRIVER_ALLOWLIST,
+    AutoParallelRioReader,
+    SelfCleaningDatasetReader,
+    SingleThreadedRioDataset,
+    ThreadLocalRioDataset,
+    ThreadsafeRioDataset,
+    _curthread,
+)
+from stackstac.timer import time
 
 from oxeo.core.logging import logger
 from oxeo.core.stac import landsat, sentinel1
@@ -28,6 +41,64 @@ SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
+
+
+class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
+    def _open(self) -> ThreadsafeRioDataset:
+        with self.gdal_env.open:
+            with time(f"Initial read for {self.url!r} on {_curthread()}: {{t}}"):
+                try:
+                    ds = SelfCleaningDatasetReader(
+                        rio.parse_path(self.url), sharing=False
+                    )
+                except Exception as e:
+                    msg = f"Error opening {self.url!r}: {e!r}"
+                    if exception_matches(e, self.errors_as_nodata):
+                        warnings.warn(msg)
+                        return NodataReader(
+                            dtype=self.dtype, fill_value=self.fill_value
+                        )
+
+                    raise RuntimeError(msg) from e
+            if ds.count != 1:
+                ds.close()
+                raise RuntimeError(
+                    f"Assets must have exactly 1 band, but file {self.url!r} has {ds.count}. "
+                    "We can't currently handle multi-band rasters (each band has to be "
+                    "a separate STAC asset), so you'll need to exclude this asset from your analysis."
+                )
+
+            # Only make a VRT if the dataset doesn't match the spatial spec we want
+            _, gcp_crs = ds.gcps
+            if self.spec.vrt_params != {
+                "crs": gcp_crs,
+                "transform": ds.transform,
+                "height": ds.height,
+                "width": ds.width,
+            }:
+                with self.gdal_env.open_vrt:
+                    vrt = WarpedVRT(
+                        ds,
+                        sharing=False,
+                        resampling=self.resampling,
+                        **self.spec.vrt_params,
+                    )
+            else:
+                logger.info(f"Skipping VRT for {self.url!r}")
+                vrt = None
+
+        if ds.driver in MULTITHREADED_DRIVER_ALLOWLIST:
+            return ThreadLocalRioDataset(self.gdal_env, ds, vrt=vrt)
+            # ^ NOTE: this forces all threads to wait for the `open()` we just did before they can open their
+            # thread-local datasets. In principle, this would double the wall-clock open time, but if the above `open()`
+            # is cached, it can actually be faster than all threads duplicating the same request in parallel.
+            # This is worth profiling eventually for cases when STAC tells us the media type is a GeoTIFF.
+        else:
+            # logger.warning(
+            #     f"Falling back on single-threaded reader for {self.url!r} (driver: {ds.driver!r}). "
+            #     "This will be slow!"
+            # )
+            return SingleThreadedRioDataset(self.gdal_env, ds, vrt=vrt)
 
 
 class CusotomSentinel1Reader:
@@ -146,6 +217,8 @@ def get_water_geoms(
 def get_aoi_from_landsat_shub_catalog(
     shub_catalog: SentinelHubCatalog,
     data_collection: DataCollection,
+    bbox: BBox,
+    time_interval: Tuple[str, str],
     search_params: SearchParams,
     category: str = "T1",
 ) -> xr.DataArray:
@@ -155,16 +228,18 @@ def get_aoi_from_landsat_shub_catalog(
     Args:
         shub_catalog (SentinelHubCatalog): the catalog object, ex: catalog = SentinelHubCatalog(config=config)
         data_collection (DataCollection): the enum defining which landsat to use. ex: DataCollection.LANDSAT_ETM_L1
+        bbox: (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
         search_params (SearchParams): the search params to be used by pystac_client search.
-                    It is mandatory that the search_params contain a 'bbox' key containing
-                    a  shub BBox object
         category (str): Tier level "RAW", "T1", "T2"
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
 
-    search_iterator = shub_catalog.search(data_collection, **search_params)
+    search_iterator = shub_catalog.search(
+        data_collection, bbox=bbox, time=time_interval, **search_params
+    )
     processing_level = data_collection.processing_level
     items = []
     for res in search_iterator:
@@ -181,22 +256,17 @@ def get_aoi_from_landsat_shub_catalog(
 
     items = pystac.ItemCollection(items)
 
-    stack = stackstac.stack(items)
+    stack = stackstac.stack(items, epsg=4326, fill_value=0)
 
-    min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
-        search_params["bbox"].min_x, search_params["bbox"].min_y
-    )
-    max_x_utm, max_y_utm = pyproj.Proj(stack.crs)(
-        search_params["bbox"].max_x, search_params["bbox"].max_y
-    )
-
-    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
-
+    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
     return aoi
 
 
 def get_aoi_from_s1_shub_catalog(
     shub_catalog: SentinelHubCatalog,
+    data_collection: DataCollection,
+    bbox: BBox,
+    time_interval: Tuple[str, str],
     search_params: SearchParams,
 ) -> xr.DataArray:
     """Get an aoi from sentinel 1 shub catalog using the search params.
@@ -204,84 +274,100 @@ def get_aoi_from_s1_shub_catalog(
 
     Args:
         shub_catalog (SentinelHubCatalog): the catalog object, ex: catalog = SentinelHubCatalog(config=config)
+        data_collection (DataCollection): the enum defining which landsat to use. ex: DataCollection.SENTINEL1
+        bbox: (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
         search_params (SearchParams): the search params to be used by pystac_client search.
-                    It is mandatory that the search_params contain a 'bbox' key containing
-                    a  shub BBox object
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
 
-    search_iterator = shub_catalog.search(DataCollection.SENTINEL1, **search_params)
+    search_iterator = shub_catalog.search(
+        collection=data_collection, time=time_interval, bbox=bbox, **search_params
+    )
 
     items = []
     for res in search_iterator:
         items.append(sentinel1.create_item(res["assets"]["s3"]["href"]))
     items = pystac.ItemCollection(items)
 
-    stack = stackstac.stack(items, reader=CusotomSentinel1Reader)
-
-    min_x, min_y = search_params["bbox"].min_x, search_params["bbox"].min_y
-
-    max_x, max_y = search_params["bbox"].max_x, search_params["bbox"].max_y
-
-    aoi = stack.loc[..., max_y:min_y, min_x:max_x]
-
+    stack = stackstac.stack(
+        items, reader=AutoParallelRioReaderWithCrs, epsg=4326, fill_value=0
+    )
+    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
     return aoi
 
 
 def get_aoi_from_stac_catalog(
-    catalog_url: str,
+    catalog: Union[str, SentinelHubCatalog],
+    data_collection: Union[str, DataCollection],
+    bbox: BBox,
+    time_interval: Tuple[str, str],
     search_params: SearchParams,
-    chunk_aligned: bool = False,
-    resolution: Optional[int] = None,
+    **kwargs,
+) -> xr.DataArray:
+    """Get an aoi from a stac catalog using the search params.
+
+    Args:
+        catalog_url (Union[str, SentinelHubCatalog]): the catalog url
+        data_collection (Union[str, DataCollection]): if using a SentinelHubCatalog url, it must be a DataCollection
+        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
+        search_params (SearchParams): the search params to be used by the catalog search.
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+    collection_str = str(data_collection).lower()
+    print(collection_str)
+    if "sentinel-s2" in collection_str:
+        aoi = get_aoi_from_s2_stac_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    elif "sentinel1" in collection_str:
+        aoi = get_aoi_from_s1_shub_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    elif "landsat" in collection_str:
+        aoi = get_aoi_from_landsat_shub_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    else:
+        raise Exception("sentinel2|sentinel1|landsat not found in data collection.")
+    return aoi
+
+
+def get_aoi_from_s2_stac_catalog(
+    catalog: str,
+    data_collection: str,
+    bbox: BBox,
+    time_interval: Tuple[str, str],
+    search_params: SearchParams,
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
 
     Args:
-        catalog_url (str): the catalog url
+        catalog (str): the catalog
+        data_collection (str): data collection in the stac catalog
+        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str,str]): time_interval. Format: ("2020-12-10","2021-02-01")
         search_params (SearchParams): the search params to be used by pystac_client search.
-                    It is mandatory that the search_params contain the 'bbox' key (min_x, min_y, max_x, max_y)
-        chunk_aligned (bool): if True the data is chunk aligned
-        resolution (Optional[int]): The resolution of the data. If it cannot be infered by stac
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
-    catalog = pystac_client.Client.open(catalog_url)
-    items = catalog.search(**search_params).get_all_items()
-    stack = stackstac.stack(items, resolution=resolution)
+    catalog = pystac_client.Client.open(catalog)
+    items = catalog.search(
+        collections=data_collection,
+        bbox=(bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y),
+        datetime="/".join(time_interval),
+        **search_params,
+    ).get_all_items()
 
-    min_x_utm, min_y_utm = pyproj.Proj(stack.crs)(
-        search_params["bbox"][0], search_params["bbox"][1]
-    )
-    max_x_utm, max_y_utm = pyproj.Proj(stack.crs)(
-        search_params["bbox"][2], search_params["bbox"][3]
-    )
+    stack = stackstac.stack(items, epsg=4326)
 
-    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
+    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
 
-    # Sometimes the aoi chunksize is not correctly aligned with the original chunksize.
-    # So we add an offset if needed comparing the original
-    # chunk size to the new aoi chunk size.
-    # We add a buffer in meters to y_top, y_bottom, x_left and x_right.
-    if chunk_aligned:
-        m_buffer_y_top = (
-            stack.chunksizes["y"][0] - aoi.chunksizes["y"][0]
-        ) * stack.resolution
-        m_buffer_y_bottom = (
-            stack.chunksizes["y"][0] - aoi.chunksizes["y"][-1]
-        ) * stack.resolution
-        m_buffer_x_left = (
-            stack.chunksizes["x"][0] - aoi.chunksizes["x"][0]
-        ) * stack.resolution
-        m_buffer_x_right = (
-            stack.chunksizes["x"][0] - aoi.chunksizes["x"][-1]
-        ) * stack.resolution
-        aoi = stack.loc[
-            ...,
-            max_y_utm + m_buffer_y_top : min_y_utm - m_buffer_y_bottom,
-            min_x_utm - m_buffer_x_left : max_x_utm + m_buffer_x_right,
-        ]
     return aoi

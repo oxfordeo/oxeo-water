@@ -5,6 +5,7 @@ from .data import (  # noqa
     fetch_water_list,
     get_aoi_from_landsat_shub_catalog,
     get_aoi_from_s1_shub_catalog,
+    get_aoi_from_stac_catalog,
     get_water_geoms,
     query_asf,
 )
