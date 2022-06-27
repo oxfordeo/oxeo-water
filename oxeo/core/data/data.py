@@ -44,6 +44,9 @@ DATE_LATEST = datetime(2200, 1, 1)
 
 
 class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def _open(self) -> ThreadsafeRioDataset:
         with self.gdal_env.open:
             with time(f"Initial read for {self.url!r} on {_curthread()}: {{t}}"):
@@ -69,16 +72,20 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
                 )
 
             # Only make a VRT if the dataset doesn't match the spatial spec we want
-            _, gcp_crs = ds.gcps
-            if self.spec.vrt_params != {
-                "crs": gcp_crs,
-                "transform": ds.transform,
+            gcps, gcp_crs = ds.gcps
+
+            ds_dict = {
+                "crs": gcp_crs.to_epsg(),
+                "transform": rasterio.transform.from_gcps(gcps),
                 "height": ds.height,
                 "width": ds.width,
-            }:
+            }
+            if self.spec.vrt_params != ds_dict:
                 with self.gdal_env.open_vrt:
                     vrt = WarpedVRT(
-                        ds,
+                        src_dataset=ds,
+                        src_crs=ds_dict["crs"],
+                        src_transform=ds_dict["transform"],
                         sharing=False,
                         resampling=self.resampling,
                         **self.spec.vrt_params,
@@ -108,8 +115,10 @@ class CusotomSentinel1Reader:
         self.url = url
 
     def read(self, window: Window, **kwargs):
+        print(f"read {self.url}")
         with rasterio.open(self.url) as src:
-            result = src.read(window=window, masked=True, **kwargs)
+            print(f"reading {self.url}")
+            result = src.read(1, masked=False, **kwargs)
 
         return result
 
@@ -250,13 +259,20 @@ def get_aoi_from_landsat_shub_catalog(
                 if processing_level == "L1":
                     asset_id = asset_id.replace("_SR", "")
                 mtl_url = f"{base_url}/{asset_id}_MTL.xml"
-                items.append(landsat.create_stac_item(mtl_url))
+                item = landsat.create_stac_item(mtl_url)
+                items.append(item)
         except FileNotFoundError:
             logger.warning(f"File {mtl_url} not found in s3 catalog.")
 
+    # # Count the number of unique epsg in items
+    # epsg_count = Counter([item.properties["proj:epsg"] for item in items])
+    # # Select most common epsg
+    # epsg = epsg_count.most_common(1)[0][0]
+    # # Filter out items that doesn't have most common epsg
+    # items = [item for item in items if item.properties["proj:epsg"] == epsg]
     items = pystac.ItemCollection(items)
 
-    stack = stackstac.stack(items, epsg=4326, fill_value=0)
+    stack = stackstac.stack(items, epsg=4326)
 
     aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
     return aoi
@@ -291,7 +307,6 @@ def get_aoi_from_s1_shub_catalog(
     for res in search_iterator:
         items.append(sentinel1.create_item(res["assets"]["s3"]["href"]))
     items = pystac.ItemCollection(items)
-
     stack = stackstac.stack(
         items, reader=AutoParallelRioReaderWithCrs, epsg=4326, fill_value=0
     )
@@ -320,7 +335,6 @@ def get_aoi_from_stac_catalog(
         xr.DataArray: the aoi as an xarray dataarray
     """
     collection_str = str(data_collection).lower()
-    print(collection_str)
     if "sentinel-s2" in collection_str:
         aoi = get_aoi_from_s2_stac_catalog(
             catalog, data_collection, bbox, time_interval, search_params, **kwargs
@@ -365,7 +379,7 @@ def get_aoi_from_s2_stac_catalog(
         datetime="/".join(time_interval),
         **search_params,
     ).get_all_items()
-
+    print(items.items[0].properties)
     stack = stackstac.stack(items, epsg=4326)
 
     aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]

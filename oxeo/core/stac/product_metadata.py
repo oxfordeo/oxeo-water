@@ -138,7 +138,8 @@ class ProductMetadata:
     def image_paths(self) -> List[str]:
         head_folder = os.path.dirname(self.href)
         measurements = os.path.join(head_folder, "measurement")
-        return ["s3://" + x for x in self.fs.ls(measurements) if x.endswith("tiff")]
+        paths = ["s3://" + x for x in self.fs.ls(measurements) if x.endswith("tiff")]
+        return paths
 
     @property
     def metadata_dict(self) -> Dict[str, Any]:
