@@ -1,11 +1,13 @@
 import csv
 import warnings
+from collections import Counter
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Tuple, Union
 
 import geopandas as gpd
 import pandas as pd
+import pyproj
 import pystac
 import pystac_client
 import rasterio
@@ -16,7 +18,6 @@ import stackstac
 import xarray as xr
 from pyproj import CRS
 from rasterio.vrt import WarpedVRT
-from rasterio.windows import Window
 from sentinelhub import BBox, DataCollection, SentinelHubCatalog
 from shapely import wkb
 from sqlalchemy import column, table
@@ -35,6 +36,7 @@ from stackstac.timer import time
 
 from oxeo.core.logging import logger
 from oxeo.core.stac import landsat, sentinel1
+from oxeo.core.utils import get_utm_epsg
 
 SearchParamValue = Union[str, list, int, float]
 SearchParams = Dict[str, SearchParamValue]
@@ -72,7 +74,7 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
                 )
 
             # Only make a VRT if the dataset doesn't match the spatial spec we want
-            gcps, gcp_crs = ds.gcps
+            gcps, gcp_crs = ds.get_gcps()
 
             ds_dict = {
                 "crs": gcp_crs.to_epsg(),
@@ -82,13 +84,17 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
             }
             if self.spec.vrt_params != ds_dict:
                 with self.gdal_env.open_vrt:
+
                     vrt = WarpedVRT(
                         src_dataset=ds,
                         src_crs=ds_dict["crs"],
+                        crs=self.spec.vrt_params["crs"],
                         src_transform=ds_dict["transform"],
+                        transform=self.spec.vrt_params["transform"],
+                        height=self.spec.vrt_params["height"],
+                        width=self.spec.vrt_params["width"],
                         sharing=False,
                         resampling=self.resampling,
-                        **self.spec.vrt_params,
                     )
             else:
                 logger.info(f"Skipping VRT for {self.url!r}")
@@ -106,21 +112,6 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
             #     "This will be slow!"
             # )
             return SingleThreadedRioDataset(self.gdal_env, ds, vrt=vrt)
-
-
-class CusotomSentinel1Reader:
-    """Custom Sentinel 1 reader to avoid errors with stackstac"""
-
-    def __init__(self, url, **kwargs):
-        self.url = url
-
-    def read(self, window: Window, **kwargs):
-        print(f"read {self.url}")
-        with rasterio.open(self.url) as src:
-            print(f"reading {self.url}")
-            result = src.read(1, masked=False, **kwargs)
-
-        return result
 
 
 def query_asf(
@@ -264,17 +255,22 @@ def get_aoi_from_landsat_shub_catalog(
         except FileNotFoundError:
             logger.warning(f"File {mtl_url} not found in s3 catalog.")
 
-    # # Count the number of unique epsg in items
-    # epsg_count = Counter([item.properties["proj:epsg"] for item in items])
-    # # Select most common epsg
-    # epsg = epsg_count.most_common(1)[0][0]
-    # # Filter out items that doesn't have most common epsg
-    # items = [item for item in items if item.properties["proj:epsg"] == epsg]
+    # Count the number of unique epsg in items
+    epsg_count = Counter([item.properties["proj:epsg"] for item in items])
+    # Select most common epsg
+    epsg = epsg_count.most_common(1)[0][0]
+    # Filter out items that doesn't have most common epsg
+    items = [item for item in items if item.properties["proj:epsg"] == epsg]
     items = pystac.ItemCollection(items)
 
-    stack = stackstac.stack(items, epsg=4326)
+    stack = stackstac.stack(items)
 
-    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
+    utm_epsg = epsg
+    min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
+    max_x_utm, max_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.max_x, bbox.max_y)
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
+
     return aoi
 
 
@@ -305,12 +301,20 @@ def get_aoi_from_s1_shub_catalog(
 
     items = []
     for res in search_iterator:
-        items.append(sentinel1.create_item(res["assets"]["s3"]["href"]))
+        item = sentinel1.create_item(res["assets"]["s3"]["href"])
+        items.append(item)
     items = pystac.ItemCollection(items)
+
+    utm_epsg = get_utm_epsg(bbox.min_y, bbox.min_x)
+
     stack = stackstac.stack(
-        items, reader=AutoParallelRioReaderWithCrs, epsg=4326, fill_value=0
+        items, reader=AutoParallelRioReaderWithCrs, epsg=utm_epsg, resolution=10
     )
-    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
+
+    min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
+    max_x_utm, max_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.max_x, bbox.max_y)
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
     return aoi
 
 
@@ -379,9 +383,22 @@ def get_aoi_from_s2_stac_catalog(
         datetime="/".join(time_interval),
         **search_params,
     ).get_all_items()
-    print(items.items[0].properties)
-    stack = stackstac.stack(items, epsg=4326)
+    stack = stackstac.stack(items)
 
-    aoi = stack.loc[..., bbox.max_y : bbox.min_y, bbox.min_x : bbox.max_x]
+    # Count the number of unique epsg in items
+    epsg_count = Counter([item.properties["proj:epsg"] for item in items])
+    # Select most common epsg
+    epsg = epsg_count.most_common(1)[0][0]
+    # Filter out items that doesn't have most common epsg
+    items = [item for item in items if item.properties["proj:epsg"] == epsg]
+    items = pystac.ItemCollection(items)
+
+    stack = stackstac.stack(items)
+
+    utm_epsg = epsg
+    min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
+    max_x_utm, max_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.max_x, bbox.max_y)
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
 
     return aoi
