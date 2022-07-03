@@ -8,8 +8,8 @@ from attr import define
 from pyproj import CRS
 from shapely.geometry import MultiPolygon, Polygon
 
+from oxeo.core.data import get_aoi_from_stac_catalog
 from oxeo.core.logging import logger
-from oxeo.core.models.data import get_aoi_from_stac_catalog
 from oxeo.core.utils import get_band_list, get_transform_function
 
 

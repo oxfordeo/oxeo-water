@@ -6,8 +6,8 @@ import pytest
 import zarr
 from sqlalchemy import create_engine
 
+from oxeo.core.data import data2gdf, fetch_water_list
 from oxeo.core.models import timeseries
-from oxeo.core.models.data import data2gdf, fetch_water_list
 from oxeo.core.models.waterbody import get_waterbodies
 
 

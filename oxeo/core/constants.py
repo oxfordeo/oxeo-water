@@ -415,3 +415,10 @@ RESOLUTION_INFO = {
     "landsat-7": 30,
     "landsat-8": 30,
 }
+
+BAND_PREDICTOR_ORDER = {
+    "sentinel-2": ("nir", "red", "green", "blue", "swir16", "swir22"),
+    "landsat-5": ("nir08", "red", "green", "blue", "swir16", "swir22"),
+    "landsat-7": ("nir08", "red", "green", "blue", "swir16", "swir22"),
+    "landsat-8": ("nir08", "red", "green", "blue", "swir16", "swir22"),
+}
