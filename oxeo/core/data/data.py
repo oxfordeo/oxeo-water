@@ -318,44 +318,6 @@ def get_aoi_from_s1_shub_catalog(
     return aoi
 
 
-def get_aoi_from_stac_catalog(
-    catalog: Union[str, SentinelHubCatalog],
-    data_collection: Union[str, DataCollection],
-    bbox: BBox,
-    time_interval: Tuple[str, str],
-    search_params: SearchParams,
-    **kwargs,
-) -> xr.DataArray:
-    """Get an aoi from a stac catalog using the search params.
-
-    Args:
-        catalog_url (Union[str, SentinelHubCatalog]): the catalog url
-        data_collection (Union[str, DataCollection]): if using a SentinelHubCatalog url, it must be a DataCollection
-        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
-        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
-        search_params (SearchParams): the search params to be used by the catalog search.
-
-    Returns:
-        xr.DataArray: the aoi as an xarray dataarray
-    """
-    collection_str = str(data_collection).lower()
-    if "sentinel-s2" in collection_str:
-        aoi = get_aoi_from_s2_stac_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
-        )
-    elif "sentinel1" in collection_str:
-        aoi = get_aoi_from_s1_shub_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
-        )
-    elif "landsat" in collection_str:
-        aoi = get_aoi_from_landsat_shub_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
-        )
-    else:
-        raise Exception("sentinel2|sentinel1|landsat not found in data collection.")
-    return aoi
-
-
 def get_aoi_from_s2_stac_catalog(
     catalog: str,
     data_collection: str,
@@ -402,3 +364,80 @@ def get_aoi_from_s2_stac_catalog(
     aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
 
     return aoi
+
+
+def get_aoi_from_stac_catalog(
+    catalog: Union[str, SentinelHubCatalog],
+    data_collection: Union[str, DataCollection],
+    bbox: BBox,
+    time_interval: Tuple[str, str],
+    search_params: SearchParams,
+    **kwargs,
+) -> xr.DataArray:
+    """Get an aoi from a stac catalog using the search params.
+
+    Args:
+        catalog_url (Union[str, SentinelHubCatalog]): the catalog url
+        data_collection (Union[str, DataCollection]): if using a SentinelHubCatalog url, it must be a DataCollection
+        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
+        search_params (SearchParams): the search params to be used by the catalog search.
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+    collection_str = str(data_collection).lower()
+    if "sentinel-s2" in collection_str:
+        aoi = get_aoi_from_s2_stac_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    elif "sentinel1" in collection_str:
+        aoi = get_aoi_from_s1_shub_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    elif "landsat" in collection_str:
+        aoi = get_aoi_from_landsat_shub_catalog(
+            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        )
+    else:
+        raise Exception("sentinel2|sentinel1|landsat not found in data collection.")
+    return aoi
+
+
+def load_aoi_from_stac_as_dict(
+    catalog: Union[str, SentinelHubCatalog],
+    data_collection: Union[str, DataCollection],
+    bbox: BBox,
+    time_interval: Tuple[str, str],
+    search_params: SearchParams,
+    bands: List[str],
+    revisit: slice,
+    median: bool = False,
+    **kwargs,
+) -> dict:
+    """Load aoi from stac catalog as a dict.
+
+    Args:
+        catalog_url (Union[str, SentinelHubCatalog]): the catalog url
+        data_collection (Union[str, DataCollection]): if using a SentinelHubCatalog url, it must be a DataCollection
+        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
+        search_params (SearchParams): the search params to be used by the catalog search.
+        bands (List[str]): The bands to load
+        revisit (Optional[slice]): The slice in time dim to load
+        median (bool): If the resuling array is medianed in time. Defaults to False.
+    Returns:
+        dict: The aoi as a dict in the "image" key.
+    """
+    aoi = get_aoi_from_stac_catalog(
+        catalog, data_collection, bbox, time_interval, search_params, **kwargs
+    )
+
+    bands_index = [list(aoi.common_name.values).index(name) for name in bands]
+
+    aoi = aoi.isel(band=bands_index, time=revisit)
+    if median:
+        aoi = aoi.median(dim="time")
+    sample = {}
+    sample["image"] = aoi.values
+    return sample

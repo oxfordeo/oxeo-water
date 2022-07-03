@@ -1,22 +1,23 @@
 from argparse import ArgumentParser
 from functools import lru_cache
-from typing import List, Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import segmentation_models_pytorch as smp
 import torch
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
+from sentinelhub import BBox, DataCollection, SentinelHubCatalog
 from skimage.util.shape import view_as_blocks
 from torch.nn import CrossEntropyLoss
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from oxeo.core.constants import RESOLUTION_INFO
+from oxeo.core.data import SearchParams, load_aoi_from_stac_as_dict
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import (
     TilePath,
-    load_aoi_from_stac_as_dict,
     load_tile_as_dict,
     load_tile_from_stac_as_dict,
 )
@@ -202,27 +203,27 @@ class Segmentation2DPredictor(Predictor):
 
     def predict_stac_aoi(
         self,
-        catalog_url=None,
-        collections=None,
-        datetime=None,
-        constellation=None,
-        bbox: List[int] = None,
-        revisit=None,
-        chunk_aligned: bool = False,
+        constellation: str,
+        catalog: Union[str, SentinelHubCatalog],
+        data_collection: Union[str, DataCollection],
+        bbox: BBox,
+        time_interval: Tuple[str, str],
+        search_params: SearchParams,
+        revisit: slice,
+        median: bool = False,
     ):
-        search_params = {"bbox": bbox, "collections": collections, "datetime": datetime}
         sample = load_aoi_from_stac_as_dict(
-            catalog_url=catalog_url,
-            search_params=search_params,
-            bands=self.bands,
-            revisit=revisit,
-            chunk_aligned=chunk_aligned,
+            catalog,
+            data_collection,
+            bbox,
+            time_interval,
+            search_params,
+            self.bands,
+            revisit,
+            median,
         )
-        sample = resize_sample(
-            sample,
-            sample_resolution=RESOLUTION_INFO[constellation],
-            target_resolution=self.target_resolution,
-        )
+        # convert sample img to tensor
+        sample["image"] = torch.from_numpy(sample["image"])
         resampled_shape = sample["image"].shape
         sample = pad_sample(sample, pad_to=self.chip_size)
 
