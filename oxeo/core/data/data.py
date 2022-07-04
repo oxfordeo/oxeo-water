@@ -54,7 +54,7 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
             with time(f"Initial read for {self.url!r} on {_curthread()}: {{t}}"):
                 try:
                     ds = SelfCleaningDatasetReader(
-                        rio.parse_path(self.url), sharing=False
+                        self.url, sharing=False
                     )
                 except Exception as e:
                     msg = f"Error opening {self.url!r}: {e!r}"
