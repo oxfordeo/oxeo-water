@@ -345,7 +345,6 @@ def get_aoi_from_s2_stac_catalog(
         datetime="/".join(time_interval),
         **search_params,
     ).get_all_items()
-    stack = stackstac.stack(items)
 
     # Count the number of unique epsg in items
     epsg_count = Counter([item.properties["proj:epsg"] for item in items])
