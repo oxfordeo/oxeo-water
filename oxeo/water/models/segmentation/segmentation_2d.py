@@ -191,7 +191,7 @@ class DaskSegmentationPredictor(Predictor):
         if self.fs is None:
             ckpt = self.ckpt_path
         else:
-            self.fs.open(self.ckpt_path)
+            ckpt = self.fs.open(self.ckpt_path)
         model = Segmentation2D.load_from_checkpoint(
             ckpt,
             input_channels=self.input_channels,
@@ -576,7 +576,7 @@ def reconstruct_image_from_patches(stack, revisits, target_h, target_w, patch_si
     total_patches_height = target_h // patch_size
     total_patches_per_revisit = total_patches_width * total_patches_height
     img = (
-        stack.reshape(total_patches_per_revisit, -1, patch_size, patch_size, order="F")
+        stack.reshape(total_patches_per_revisit, -1, patch_size, patch_size)
         .transpose(1, 0, total_patches_height, total_patches_width)
         .reshape(
             revisits,
