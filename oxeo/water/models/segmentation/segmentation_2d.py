@@ -2,8 +2,11 @@ from argparse import ArgumentParser
 from functools import lru_cache
 from typing import Tuple, Union
 
+import dask
+import dask.array as da
 import numpy as np
 import segmentation_models_pytorch as smp
+import toolz
 import torch
 from pl_bolts.models.vision.unet import UNet
 from pytorch_lightning import LightningModule
@@ -13,8 +16,12 @@ from torch.nn import CrossEntropyLoss
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
-from oxeo.core.constants import RESOLUTION_INFO
-from oxeo.core.data import SearchParams, load_aoi_from_stac_as_dict
+from oxeo.core.constants import BAND_PREDICTOR_ORDER, RESOLUTION_INFO
+from oxeo.core.data import (
+    SearchParams,
+    get_aoi_from_stac_catalog,
+    load_aoi_from_stac_as_dict,
+)
 from oxeo.core.logging import logger
 from oxeo.core.models.tile import (
     TilePath,
@@ -143,6 +150,142 @@ class Segmentation2D(LightningModule):
         )
 
         return parser
+
+
+class DaskSegmentationPredictor(Predictor):
+    def __init__(
+        self,
+        batch_size=16,
+        ckpt_path: str = "gs://oxeo-models/last.ckpt",
+        input_channels: int = 6,
+        num_classes: int = 3,
+        chip_size: int = 250,
+        fs=None,
+        bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
+        target_resolution: int = 10,
+        model_name: str = "unet",
+        **kwargs,
+    ):
+        self.ckpt_path = ckpt_path
+        self.input_channels = input_channels
+        self.num_classes = num_classes
+        self.num_classes = num_classes
+        self.batch_size = batch_size
+        self.chip_size = chip_size
+        self.use_cuda = torch.cuda.is_available()
+        self.bands = bands
+        self.transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, self.bands
+                ),
+            ]
+        )
+        self.target_resolution = target_resolution
+        self.fs = fs
+        self.model_name = model_name
+        self.get_model = self.load_model
+
+    def load_model(self):
+        logger.info(f"Loading model from path {self.ckpt_path}")
+        if self.fs is None:
+            ckpt = self.ckpt_path
+        else:
+            self.fs.open(self.ckpt_path)
+        model = Segmentation2D.load_from_checkpoint(
+            ckpt,
+            input_channels=self.input_channels,
+            num_classes=self.num_classes,
+            model_name=self.model_name,
+        )
+        if self.use_cuda:
+            model.eval().cuda()
+        else:
+            model.eval()
+        return model
+
+    def pad_xarray_to(self, arr, pad_to):
+        pad_top = abs(arr.shape[-2] % -pad_to)
+        pad_right = abs(arr.shape[-1] % -pad_to)
+
+        return arr.pad(x=(0, pad_right), y=(0, pad_top))
+
+    def create_patches_from_xarray(self, arr, patch_size):
+        patches = []
+        for t in range(0, arr.shape[0]):
+            for i in range(0, arr.shape[-2], patch_size):
+                for j in range(0, arr.shape[-1], patch_size):
+                    patches.append(arr[t, :, i : i + patch_size, j : j + patch_size])
+        return patches
+
+    def predict_stac_aoi(
+        self,
+        constellation: str,
+        catalog: Union[str, SentinelHubCatalog],
+        data_collection: Union[str, DataCollection],
+        bbox: BBox,
+        time_interval: Tuple[str, str],
+        search_params: SearchParams,
+    ):
+        aoi = get_aoi_from_stac_catalog(
+            catalog=catalog,
+            data_collection=data_collection,
+            bbox=bbox,
+            time_interval=time_interval,
+            search_params=search_params,
+        )
+
+        bands_index = [
+            list(aoi.common_name.values).index(name)
+            for name in BAND_PREDICTOR_ORDER[constellation]
+        ]
+        padded_aoi = self.pad_xarray_to(aoi.isel(band=bands_index), self.chip_size)
+
+        patches = self.create_patches_from_xarray(
+            padded_aoi,
+            patch_size=self.chip_size,
+        )
+
+        batches = [
+            self.to_tensor(da.stack(list(batch)))
+            for batch in toolz.partition_all(10, patches)
+        ]
+
+        model = self.get_model()
+        dmodel = dask.delayed(model)
+
+        predictions = [
+            self.dask_predict(dmodel, batch, constellation) for batch in batches
+        ]
+        return predictions, padded_aoi
+
+    @dask.delayed
+    def to_tensor(self, batch):
+        return torch.as_tensor(batch)
+
+    @dask.delayed
+    def dask_predict(self, model, batch, constellation):
+
+        item = {}
+        input_tensor = torch.as_tensor(batch, dtype=torch.int16)
+        tensors = []
+        for t in input_tensor:
+            item["image"] = t
+            item["constellation"] = constellation
+            item = self.transforms(item)
+            tensors.append(item["image"])
+        tensors = torch.stack(tensors)
+        if self.use_cuda:
+            tensors = tensors.cuda()
+        current_pred = model(tensors)
+        del tensors
+        current_pred = torch.softmax(current_pred, dim=1)
+        current_pred = torch.argmax(current_pred, 1)
+        current_pred = current_pred.data.type(torch.uint8)
+        if self.use_cuda:
+            current_pred = current_pred.cpu()
+        current_pred = current_pred.numpy()
+        return current_pred
 
 
 class Segmentation2DPredictor(Predictor):
@@ -426,3 +569,23 @@ def reconstruct_from_patches(
         rec_img.append(np.vstack(v_stack))
         block_n = 0
     return np.array(rec_img)
+
+
+def reconstruct_image_from_patches(stack, revisits, target_h, target_w, patch_size):
+    total_patches_width = target_w // patch_size
+    total_patches_height = target_h // patch_size
+    total_patches_per_revisit = total_patches_width * total_patches_height
+    img = (
+        stack.reshape(total_patches_per_revisit, -1, patch_size, patch_size, order="F")
+        .transpose(1, 0, total_patches_height, total_patches_width)
+        .reshape(
+            revisits,
+            total_patches_height,
+            total_patches_width,
+            patch_size,
+            patch_size,
+        )
+        .transpose(0, 1, 3, 2, 4)
+        .reshape(revisits, target_h, target_w)
+    )
+    return img
