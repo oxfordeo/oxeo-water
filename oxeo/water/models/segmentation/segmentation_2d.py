@@ -577,7 +577,6 @@ def reconstruct_image_from_patches(stack, revisits, target_h, target_w, patch_si
     total_patches_per_revisit = total_patches_width * total_patches_height
     img = (
         stack.reshape(total_patches_per_revisit, -1, patch_size, patch_size)
-        .transpose(1, 0, -2, -1)
         .reshape(
             revisits,
             total_patches_height,
