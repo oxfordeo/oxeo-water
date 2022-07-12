@@ -155,7 +155,7 @@ class Segmentation2D(LightningModule):
 class DaskSegmentationPredictor(Predictor):
     def __init__(
         self,
-        batch_size=16,
+        batch_size=1,
         ckpt_path: str = "gs://oxeo-models/last.ckpt",
         input_channels: int = 6,
         num_classes: int = 3,
@@ -248,7 +248,7 @@ class DaskSegmentationPredictor(Predictor):
 
         batches = [
             self.to_tensor(da.stack(list(batch)))
-            for batch in toolz.partition_all(10, patches)
+            for batch in toolz.partition_all(self.batch_size, patches)
         ]
 
         model = self.get_model()
