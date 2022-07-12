@@ -571,20 +571,22 @@ def reconstruct_from_patches(
     return np.array(rec_img)
 
 
+@dask.delayed
+def stack_preds(preds):
+    return da.vstack(preds)
+
+
+@dask.delayed
 def reconstruct_image_from_patches(stack, revisits, target_h, target_w, patch_size):
-    total_patches_width = target_w // patch_size
-    total_patches_height = target_h // patch_size
-    total_patches_per_revisit = total_patches_width * total_patches_height
-    img = (
-        stack.reshape(total_patches_per_revisit, -1, patch_size, patch_size)
-        .reshape(
-            revisits,
-            total_patches_height,
-            total_patches_width,
-            patch_size,
-            patch_size,
-        )
-        .transpose(0, 1, 3, 2, 4)
+    num_patches_h = target_h // patch_size
+    num_patches_w = target_w // patch_size
+    return (
+        stack.reshape(revisits, num_patches_h, num_patches_w, patch_size, patch_size)
+        .swapaxes(2, 3)
         .reshape(revisits, target_h, target_w)
     )
-    return img
+
+
+@dask.delayed
+def reduce_to_timeseries(stack):
+    return (stack == 1).sum(axis=(1, 2))
