@@ -24,11 +24,8 @@ from sqlalchemy import column, table
 from sqlalchemy.sql import select
 from stackstac.nodata_reader import NodataReader, exception_matches
 from stackstac.rio_reader import (
-    MULTITHREADED_DRIVER_ALLOWLIST,
     AutoParallelRioReader,
-    SelfCleaningDatasetReader,
     SingleThreadedRioDataset,
-    ThreadLocalRioDataset,
     ThreadsafeRioDataset,
     _curthread,
 )
@@ -53,9 +50,7 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
         with self.gdal_env.open:
             with time(f"Initial read for {self.url!r} on {_curthread()}: {{t}}"):
                 try:
-                    ds = SelfCleaningDatasetReader(
-                        self.url, sharing=False
-                    )
+                    ds = rio.DatasetReader(self.url, sharing=False)
                 except Exception as e:
                     msg = f"Error opening {self.url!r}: {e!r}"
                     if exception_matches(e, self.errors_as_nodata):
@@ -100,18 +95,7 @@ class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
                 logger.info(f"Skipping VRT for {self.url!r}")
                 vrt = None
 
-        if ds.driver in MULTITHREADED_DRIVER_ALLOWLIST:
-            return ThreadLocalRioDataset(self.gdal_env, ds, vrt=vrt)
-            # ^ NOTE: this forces all threads to wait for the `open()` we just did before they can open their
-            # thread-local datasets. In principle, this would double the wall-clock open time, but if the above `open()`
-            # is cached, it can actually be faster than all threads duplicating the same request in parallel.
-            # This is worth profiling eventually for cases when STAC tells us the media type is a GeoTIFF.
-        else:
-            # logger.warning(
-            #     f"Falling back on single-threaded reader for {self.url!r} (driver: {ds.driver!r}). "
-            #     "This will be slow!"
-            # )
-            return SingleThreadedRioDataset(self.gdal_env, ds, vrt=vrt)
+        return SingleThreadedRioDataset(self.gdal_env, ds, vrt=vrt)
 
 
 def query_asf(
@@ -280,6 +264,7 @@ def get_aoi_from_s1_shub_catalog(
     bbox: BBox,
     time_interval: Tuple[str, str],
     search_params: SearchParams,
+    orbit_state: str = "all",
 ) -> xr.DataArray:
     """Get an aoi from sentinel 1 shub catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
@@ -302,7 +287,8 @@ def get_aoi_from_s1_shub_catalog(
     items = []
     for res in search_iterator:
         item = sentinel1.create_item(res["assets"]["s3"]["href"])
-        items.append(item)
+        if orbit_state == "all" or item.properties["sat:orbit_state"] == orbit_state:
+            items.append(item)
     items = pystac.ItemCollection(items)
 
     utm_epsg = get_utm_epsg(bbox.min_y, bbox.min_x)
