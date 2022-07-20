@@ -325,12 +325,14 @@ def get_aoi_from_s2_stac_catalog(
         xr.DataArray: the aoi as an xarray dataarray
     """
     catalog = pystac_client.Client.open(catalog)
-    items = catalog.search(
-        collections=data_collection,
-        bbox=(bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y),
-        datetime="/".join(time_interval),
-        **search_params,
-    ).get_all_items()
+    items = list(
+        catalog.search(
+            collections=data_collection,
+            bbox=(bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y),
+            datetime="/".join(time_interval),
+            **search_params,
+        ).items()
+    )
 
     # Count the number of unique epsg in items
     epsg_count = Counter([item.properties["proj:epsg"] for item in items])
