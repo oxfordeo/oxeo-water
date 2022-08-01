@@ -3,7 +3,7 @@ import warnings
 from collections import Counter
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import geopandas as gpd
 import pandas as pd
@@ -33,6 +33,7 @@ from stackstac.timer import time
 
 from oxeo.core.logging import logger
 from oxeo.core.stac import landsat, sentinel1
+from oxeo.core.stac.constants import LANDSAT_SEARCH_PARAMS
 from oxeo.core.utils import get_utm_epsg
 
 SearchParamValue = Union[str, list, int, float]
@@ -265,6 +266,7 @@ def get_aoi_from_s1_shub_catalog(
     time_interval: Tuple[str, str],
     search_params: SearchParams,
     orbit_state: str = "all",
+    resolution: int = 10,
 ) -> xr.DataArray:
     """Get an aoi from sentinel 1 shub catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
@@ -275,6 +277,7 @@ def get_aoi_from_s1_shub_catalog(
         bbox: (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
         time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
         search_params (SearchParams): the search params to be used by pystac_client search.
+        resolution (int): the resolution of the aoi in meters
 
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
@@ -294,7 +297,7 @@ def get_aoi_from_s1_shub_catalog(
     utm_epsg = get_utm_epsg(bbox.min_y, bbox.min_x)
 
     stack = stackstac.stack(
-        items, reader=AutoParallelRioReaderWithCrs, epsg=utm_epsg, resolution=10
+        items, reader=AutoParallelRioReaderWithCrs, epsg=utm_epsg, resolution=resolution
     )
 
     min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
@@ -304,18 +307,99 @@ def get_aoi_from_s1_shub_catalog(
     return aoi
 
 
-def get_aoi_from_s2_stac_catalog(
+def get_aoi_in_utm(
+    items: Iterable[pystac.Item], bbox: BBox, resolution=10
+) -> xr.DataArray:
+    """Get an aoi in utm.
+
+    Args:
+        items (Iterable[pystac.Item]): items resulting from a stac search
+        bbox (BBox): the bounding box
+
+    Returns:
+        xr.DataArray: the aoi in utm
+    """
+    # Count the number of unique epsg in items
+    epsg_count = Counter([item.properties["proj:epsg"] for item in items])
+    # Select most common epsg
+    epsg = epsg_count.most_common(1)[0][0]
+    # Filter out items that doesn't have most common epsg
+    items = [item for item in items if item.properties["proj:epsg"] == epsg]
+    items = pystac.ItemCollection(items)
+
+    stack = stackstac.stack(items, resolution=resolution)
+
+    utm_epsg = epsg
+    min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
+    max_x_utm, max_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.max_x, bbox.max_y)
+
+    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
+
+    return aoi
+
+
+def get_aoi_from_landsatlook_catalog(
     catalog: str,
     data_collection: str,
     bbox: BBox,
     time_interval: Tuple[str, str],
     search_params: SearchParams,
+    resolution: int = 10,
+) -> xr.DataArray:
+    """Get an aoi from landsatlook stac catalog using the search params.
+    If the aoi is not chunk aligned an offset will be added.
+
+    Args:
+        catalog (str): the catalog url
+        data_collection (str): data collection in the stac catalog
+        bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
+        time_interval (Tuple[str,str]): time_interval. Format: ("2020-12-10","2021-02-01")
+        search_params (SearchParams): the search params to be used by pystac_client search.
+
+    Returns:
+        xr.DataArray: the aoi as an xarray dataarray
+    """
+    if search_params:
+        search_params = {
+            "query": LANDSAT_SEARCH_PARAMS["query"] | search_params["query"]
+        }
+    catalog = pystac_client.Client.open(catalog)
+    items = list(
+        i.to_dict()
+        for i in catalog.search(
+            collections=data_collection,
+            bbox=(bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y),
+            datetime="/".join(time_interval),
+            max_items=None,
+            **search_params,
+        ).get_items()
+    )
+    if len(items) == 0:
+        raise ValueError("No items found in the catalog")
+    for item in items:
+        for band in item["assets"].keys():
+            if item["assets"][band].get("alternate"):
+                item["assets"][band]["href"] = item["assets"][band]["alternate"]["s3"][
+                    "href"
+                ]
+    items = [pystac.Item.from_dict(item) for item in items]
+    aoi = get_aoi_in_utm(items, bbox, resolution)
+    return aoi
+
+
+def get_aoi_from_element84_catalog(
+    catalog: str,
+    data_collection: str,
+    bbox: BBox,
+    time_interval: Tuple[str, str],
+    search_params: SearchParams,
+    resolution: int = 10,
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
 
     Args:
-        catalog (str): the catalog
+        catalog (str): the catalog url
         data_collection (str): data collection in the stac catalog
         bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
         time_interval (Tuple[str,str]): time_interval. Format: ("2020-12-10","2021-02-01")
@@ -330,41 +414,31 @@ def get_aoi_from_s2_stac_catalog(
             collections=data_collection,
             bbox=(bbox.min_x, bbox.min_y, bbox.max_x, bbox.max_y),
             datetime="/".join(time_interval),
+            max_items=None,
             **search_params,
-        ).items()
+        ).get_items()
     )
 
-    # Count the number of unique epsg in items
-    epsg_count = Counter([item.properties["proj:epsg"] for item in items])
-    # Select most common epsg
-    epsg = epsg_count.most_common(1)[0][0]
-    # Filter out items that doesn't have most common epsg
-    items = [item for item in items if item.properties["proj:epsg"] == epsg]
-    items = pystac.ItemCollection(items)
+    if len(items) == 0:
+        raise ValueError("No items found in the catalog")
 
-    stack = stackstac.stack(items)
-
-    utm_epsg = epsg
-    min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
-    max_x_utm, max_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.max_x, bbox.max_y)
-
-    aoi = stack.loc[..., max_y_utm:min_y_utm, min_x_utm:max_x_utm]
-
+    aoi = get_aoi_in_utm(items, bbox, resolution)
     return aoi
 
 
 def get_aoi_from_stac_catalog(
-    catalog: Union[str, SentinelHubCatalog],
+    catalog: Optional[Union[str, SentinelHubCatalog]],
     data_collection: Union[str, DataCollection],
     bbox: BBox,
     time_interval: Tuple[str, str],
     search_params: SearchParams,
+    resolution: int = 10,
     **kwargs,
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
 
     Args:
-        catalog_url (Union[str, SentinelHubCatalog]): the catalog url
+        catalog (Union[str, SentinelHubCatalog]): the catalog url
         data_collection (Union[str, DataCollection]): if using a SentinelHubCatalog url, it must be a DataCollection
         bbox (BBox): the bounding box. Ex: BBox((min_x, min_y, max_x, max_y), crs=CRS.WGS84)
         time_interval (Tuple[str, str]): format: ("2020-12-10", "2021-02-01")
@@ -375,16 +449,34 @@ def get_aoi_from_stac_catalog(
     """
     collection_str = str(data_collection).lower()
     if "sentinel-s2" in collection_str:
-        aoi = get_aoi_from_s2_stac_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        aoi = get_aoi_from_element84_catalog(
+            catalog,
+            data_collection,
+            bbox,
+            time_interval,
+            search_params,
+            resolution,
+            **kwargs,
         )
     elif "sentinel1" in collection_str:
         aoi = get_aoi_from_s1_shub_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+            catalog,
+            data_collection,
+            bbox,
+            time_interval,
+            search_params,
+            resolution=resolution,
+            **kwargs,
         )
     elif "landsat" in collection_str:
-        aoi = get_aoi_from_landsat_shub_catalog(
-            catalog, data_collection, bbox, time_interval, search_params, **kwargs
+        aoi = get_aoi_from_landsatlook_catalog(
+            catalog,
+            data_collection,
+            bbox,
+            time_interval,
+            search_params,
+            resolution,
+            **kwargs,
         )
     else:
         raise Exception("sentinel2|sentinel1|landsat not found in data collection.")
@@ -419,10 +511,12 @@ def load_aoi_from_stac_as_dict(
     aoi = get_aoi_from_stac_catalog(
         catalog, data_collection, bbox, time_interval, search_params, **kwargs
     )
+    if "landsat" in str(data_collection).lower():
+        aoi = aoi.sel(band=list(bands))
+    else:
+        bands_index = [list(aoi.common_name.values).index(name) for name in bands]
 
-    bands_index = [list(aoi.common_name.values).index(name) for name in bands]
-
-    aoi = aoi.isel(band=bands_index, time=revisit)
+        aoi = aoi.isel(band=bands_index, time=revisit)
     if median:
         aoi = aoi.median(dim="time")
     sample = {}

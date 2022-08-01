@@ -8,6 +8,15 @@ from pystac.link import Link
 
 USWEST_URL = "https://services-uswest2.sentinel-hub.com"
 ELEMENT84_URL = "https://earth-search.aws.element84.com/v0"
+LANDSATLOOK_URL = "https://landsatlook.usgs.gov/stac-server"
+
+LANDSAT_SEARCH_PARAMS = {
+    "query": {
+        "platform": {"in": ["LANDSAT_5", "LANDSAT_7", "LANDSAT_8"]},
+        "landsat:collection_category": {"in": ["T1"]},
+    }
+}
+
 INSPIRE_METADATA_ASSET_KEY = "inspire-metadata"
 SAFE_MANIFEST_ASSET_KEY = "safe-manifest"
 PRODUCT_METADATA_ASSET_KEY = "product-metadata"

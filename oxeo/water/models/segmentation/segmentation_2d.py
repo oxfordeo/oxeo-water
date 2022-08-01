@@ -226,6 +226,7 @@ class DaskSegmentationPredictor(Predictor):
         bbox: BBox,
         time_interval: Tuple[str, str],
         search_params: SearchParams,
+        resolution: int = 10,
     ):
         aoi = get_aoi_from_stac_catalog(
             catalog=catalog,
@@ -233,11 +234,15 @@ class DaskSegmentationPredictor(Predictor):
             bbox=bbox,
             time_interval=time_interval,
             search_params=search_params,
+            resolution=resolution,
         )
 
+        if "landsat" in constellation:
+            band_names = aoi.band.values
+        else:
+            band_names = aoi.common_name.values
         bands_index = [
-            list(aoi.common_name.values).index(name)
-            for name in BAND_PREDICTOR_ORDER[constellation]
+            list(band_names).index(name) for name in BAND_PREDICTOR_ORDER[constellation]
         ]
         padded_aoi = self.pad_xarray_to(aoi.isel(band=bands_index), self.chip_size)
 
