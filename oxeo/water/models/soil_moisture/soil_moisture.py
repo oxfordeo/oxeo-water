@@ -53,6 +53,7 @@ class SoilMoisturePredictor(Predictor):
         bbox: BBox,
         time_interval: Tuple[str, str],
         search_params: SearchParams,
+        resolution: int = 10,
     ):
         aoi = get_aoi_from_stac_catalog(
             catalog=catalog,
@@ -60,7 +61,8 @@ class SoilMoisturePredictor(Predictor):
             bbox=bbox,
             time_interval=time_interval,
             search_params=search_params,
-            orbit_state="ascending",
+            orbit_state="descending",
+            resolution=resolution,
         )
 
         DpRVIc = self.DpRVIc(aoi)

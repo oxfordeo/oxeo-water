@@ -14,6 +14,7 @@ class NDVIPredictor(Predictor):
         bbox: BBox,
         time_interval: Tuple[str, str],
         search_params: SearchParams,
+        resolution: int = 10,
         **kwargs,
     ):
         aoi = get_aoi_from_stac_catalog(
@@ -22,11 +23,16 @@ class NDVIPredictor(Predictor):
             bbox=bbox,
             time_interval=time_interval,
             search_params=search_params,
+            resolution=resolution,
             **kwargs,
         )
-        common_names = aoi.common_name.values
-        red_band_index = [i for i, b in enumerate(common_names) if b and "red" in b][0]
-        nir_band_index = [i for i, b in enumerate(common_names) if b and "nir" in b][0]
+        bands = aoi.band.values
+        red_band_index = [
+            i for i, b in enumerate(bands) if b and ("red" in b or "B04" in b)
+        ][0]
+        nir_band_index = [
+            i for i, b in enumerate(bands) if b and ("nir" in b or "B08" in b)
+        ][0]
 
         nir_band = aoi.isel(band=nir_band_index)
         red_band = aoi.isel(band=red_band_index)

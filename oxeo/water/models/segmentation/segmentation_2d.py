@@ -161,7 +161,6 @@ class DaskSegmentationPredictor(Predictor):
         num_classes: int = 3,
         chip_size: int = 250,
         fs=None,
-        bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
         target_resolution: int = 10,
         model_name: str = "unet",
         **kwargs,
@@ -173,14 +172,7 @@ class DaskSegmentationPredictor(Predictor):
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.use_cuda = torch.cuda.is_available()
-        self.bands = bands
-        self.transforms = Compose(
-            [
-                ConstellationNormalize(
-                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, self.bands
-                ),
-            ]
-        )
+
         self.target_resolution = target_resolution
         self.fs = fs
         self.model_name = model_name
@@ -228,6 +220,8 @@ class DaskSegmentationPredictor(Predictor):
         search_params: SearchParams,
         resolution: int = 10,
     ):
+        constellation_bands = BAND_PREDICTOR_ORDER[constellation]
+
         aoi = get_aoi_from_stac_catalog(
             catalog=catalog,
             data_collection=data_collection,
@@ -237,13 +231,8 @@ class DaskSegmentationPredictor(Predictor):
             resolution=resolution,
         )
 
-        if "landsat" in constellation:
-            band_names = aoi.band.values
-        else:
-            band_names = aoi.common_name.values
-        bands_index = [
-            list(band_names).index(name) for name in BAND_PREDICTOR_ORDER[constellation]
-        ]
+        band_names = aoi.band.values
+        bands_index = [list(band_names).index(name) for name in constellation_bands]
         padded_aoi = self.pad_xarray_to(aoi.isel(band=bands_index), self.chip_size)
 
         patches = self.create_patches_from_xarray(
@@ -270,14 +259,21 @@ class DaskSegmentationPredictor(Predictor):
 
     @dask.delayed
     def dask_predict(self, model, batch, constellation):
-
+        constellation_bands = BAND_PREDICTOR_ORDER[constellation]
+        transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, constellation_bands
+                ),
+            ]
+        )
         item = {}
         input_tensor = torch.as_tensor(batch, dtype=torch.int16)
         tensors = []
         for t in input_tensor:
             item["image"] = t
             item["constellation"] = constellation
-            item = self.transforms(item)
+            item = transforms(item)
             tensors.append(item["image"])
         tensors = torch.stack(tensors)
         if self.use_cuda:
@@ -302,7 +298,6 @@ class Segmentation2DPredictor(Predictor):
         num_classes: int = 3,
         chip_size: int = 250,
         fs=None,
-        bands: Tuple[str, ...] = ("nir", "red", "green", "blue", "swir1", "swir2"),
         target_resolution: int = 10,
         model_name: str = "unet",
         **kwargs,
@@ -314,14 +309,7 @@ class Segmentation2DPredictor(Predictor):
         self.batch_size = batch_size
         self.chip_size = chip_size
         self.use_cuda = torch.cuda.is_available()
-        self.bands = bands
-        self.transforms = Compose(
-            [
-                ConstellationNormalize(
-                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, self.bands
-                ),
-            ]
-        )
+
         self.target_resolution = target_resolution
         self.fs = fs
         self.model_name = model_name
@@ -360,13 +348,14 @@ class Segmentation2DPredictor(Predictor):
         revisit: slice,
         median: bool = False,
     ):
+        constellation_bands = BAND_PREDICTOR_ORDER[constellation]
         sample = load_aoi_from_stac_as_dict(
             catalog,
             data_collection,
             bbox,
             time_interval,
             search_params,
-            self.bands,
+            constellation_bands,
             revisit,
             median,
         )
@@ -396,6 +385,15 @@ class Segmentation2DPredictor(Predictor):
 
         item = {}
         model = self.get_model()
+
+        transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, bands
+                ),
+            ]
+        )
+
         for i, patch in enumerate(tqdm(range(0, arr.shape[0], self.batch_size))):
             logger.debug(f"Pred loop {i} of {arr.shape[0]} with {self.batch_size=}")
             tensors = []
@@ -405,7 +403,7 @@ class Segmentation2DPredictor(Predictor):
             for t in input_tensor:
                 item["image"] = t
                 item["constellation"] = constellation
-                item = self.transforms(item)
+                item = transforms(item)
                 tensors.append(item["image"])
             tensors = torch.stack(tensors)
             if self.use_cuda:
@@ -481,6 +479,14 @@ class Segmentation2DPredictor(Predictor):
             sample_resolution=RESOLUTION_INFO[tile_path.constellation],
             target_resolution=self.target_resolution,
         )
+        constellation_bands = BAND_PREDICTOR_ORDER[tile_path.constellation]
+        transforms = Compose(
+            [
+                ConstellationNormalize(
+                    CONSTELLATION_BAND_MEAN, CONSTELLATION_BAND_STD, constellation_bands
+                ),
+            ]
+        )
         resampled_shape = sample["image"].shape
         sample = pad_sample(sample, pad_to=self.chip_size)
 
@@ -514,7 +520,7 @@ class Segmentation2DPredictor(Predictor):
             for t in input_tensor:
                 item["image"] = t
                 item["constellation"] = tile_path.constellation
-                item = self.transforms(item)
+                item = transforms(item)
                 tensors.append(item["image"])
             tensors = torch.stack(tensors)
             if self.use_cuda:
