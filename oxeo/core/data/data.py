@@ -23,6 +23,7 @@ from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
 from stackstac.nodata_reader import NodataReader, exception_matches
+from stackstac.rio_env import LayeredEnv
 from stackstac.rio_reader import (
     AutoParallelRioReader,
     SingleThreadedRioDataset,
@@ -308,7 +309,10 @@ def get_aoi_from_s1_shub_catalog(
 
 
 def get_aoi_in_utm(
-    items: Iterable[pystac.Item], bbox: BBox, resolution=10
+    items: Iterable[pystac.Item],
+    bbox: BBox,
+    resolution=10,
+    env: Optional[LayeredEnv] = None,
 ) -> xr.DataArray:
     """Get an aoi in utm.
 
@@ -327,7 +331,7 @@ def get_aoi_in_utm(
     items = [item for item in items if item.properties["proj:epsg"] == epsg]
     items = pystac.ItemCollection(items)
 
-    stack = stackstac.stack(items, resolution=resolution)
+    stack = stackstac.stack(items, resolution=resolution, gdal_env=env)
 
     utm_epsg = epsg
     min_x_utm, min_y_utm = pyproj.Proj(f"epsg:{utm_epsg}")(bbox.min_x, bbox.min_y)
@@ -345,6 +349,7 @@ def get_aoi_from_landsatlook_catalog(
     time_interval: Tuple[str, str],
     search_params: SearchParams,
     resolution: int = 10,
+    env: Optional[LayeredEnv] = None,
 ) -> xr.DataArray:
     """Get an aoi from landsatlook stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
@@ -360,9 +365,10 @@ def get_aoi_from_landsatlook_catalog(
         xr.DataArray: the aoi as an xarray dataarray
     """
     if search_params:
-        search_params = {
-            "query": LANDSAT_SEARCH_PARAMS["query"] | search_params["query"]
-        }
+        if "query" not in search_params.keys():
+            search_params = {
+                "query": LANDSAT_SEARCH_PARAMS["query"],
+            }
     catalog = pystac_client.Client.open(catalog)
     items = list(
         i.to_dict()
@@ -383,7 +389,7 @@ def get_aoi_from_landsatlook_catalog(
                     "href"
                 ]
     items = [pystac.Item.from_dict(item) for item in items]
-    aoi = get_aoi_in_utm(items, bbox, resolution)
+    aoi = get_aoi_in_utm(items, bbox, resolution, env)
     return aoi
 
 

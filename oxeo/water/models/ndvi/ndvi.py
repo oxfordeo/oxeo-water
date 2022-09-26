@@ -1,6 +1,7 @@
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from sentinelhub import BBox, DataCollection, SentinelHubCatalog
+from stackstac.rio_env import LayeredEnv
 
 from oxeo.core.data import SearchParams, get_aoi_from_stac_catalog
 from oxeo.water.models.base import Predictor
@@ -15,6 +16,7 @@ class NDVIPredictor(Predictor):
         time_interval: Tuple[str, str],
         search_params: SearchParams,
         resolution: int = 10,
+        env: Optional[LayeredEnv] = None,
         **kwargs,
     ):
         aoi = get_aoi_from_stac_catalog(
@@ -24,6 +26,7 @@ class NDVIPredictor(Predictor):
             time_interval=time_interval,
             search_params=search_params,
             resolution=resolution,
+            env=env,
             **kwargs,
         )
         bands = aoi.band.values
