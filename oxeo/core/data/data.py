@@ -400,6 +400,7 @@ def get_aoi_from_element84_catalog(
     time_interval: Tuple[str, str],
     search_params: SearchParams,
     resolution: int = 10,
+    env: Optional[LayeredEnv] = None,
 ) -> xr.DataArray:
     """Get an aoi from a stac catalog using the search params.
     If the aoi is not chunk aligned an offset will be added.
