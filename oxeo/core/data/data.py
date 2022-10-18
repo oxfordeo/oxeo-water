@@ -18,7 +18,7 @@ import stackstac
 import xarray as xr
 from pyproj import CRS
 from rasterio.vrt import WarpedVRT
-from sentinelhub import BBox, DataCollection, SentinelHubCatalog
+from sentinelhub import BBox, DataCollection, SentinelHubCatalog, __version__
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
@@ -42,6 +42,8 @@ SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
+
+print("SH version", __version__)
 
 
 class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
