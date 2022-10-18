@@ -283,6 +283,10 @@ def get_aoi_from_s1_shub_catalog(
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
+    print("COLLECTION", data_collection)
+    print("interval", time_interval)
+    print("search_params", search_params)
+    print("bbox", bbox)
 
     search_iterator = shub_catalog.search(
         collection=data_collection, time=time_interval, bbox=bbox, **search_params
@@ -290,6 +294,7 @@ def get_aoi_from_s1_shub_catalog(
 
     items = []
     for res in search_iterator:
+        print(res)
         item = sentinel1.create_item(res["assets"]["s3"]["href"])
         if orbit_state == "all" or item.properties["sat:orbit_state"] == orbit_state:
             items.append(item)
