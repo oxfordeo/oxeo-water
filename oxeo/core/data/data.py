@@ -18,7 +18,7 @@ import stackstac
 import xarray as xr
 from pyproj import CRS
 from rasterio.vrt import WarpedVRT
-from sentinelhub import BBox, DataCollection, SentinelHubCatalog
+from sentinelhub import BBox, DataCollection, SentinelHubCatalog, __version__
 from shapely import wkb
 from sqlalchemy import column, table
 from sqlalchemy.sql import select
@@ -42,6 +42,8 @@ SearchParams = Dict[str, SearchParamValue]
 
 DATE_EARLIEST = datetime(1900, 1, 1)
 DATE_LATEST = datetime(2200, 1, 1)
+
+print("SH version", __version__)
 
 
 class AutoParallelRioReaderWithCrs(AutoParallelRioReader):
@@ -283,6 +285,10 @@ def get_aoi_from_s1_shub_catalog(
     Returns:
         xr.DataArray: the aoi as an xarray dataarray
     """
+    print("COLLECTION", data_collection)
+    print("interval", time_interval)
+    print("search_params", search_params)
+    print("bbox", bbox)
 
     search_iterator = shub_catalog.search(
         collection=data_collection, time=time_interval, bbox=bbox, **search_params
@@ -290,6 +296,7 @@ def get_aoi_from_s1_shub_catalog(
 
     items = []
     for res in search_iterator:
+        print(res)
         item = sentinel1.create_item(res["assets"]["s3"]["href"])
         if orbit_state == "all" or item.properties["sat:orbit_state"] == orbit_state:
             items.append(item)
