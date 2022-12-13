@@ -1,12 +1,42 @@
+<img src="oxeo_logo.png" alt="oxeo logo" width="600"/>
+
+[OxEO](https://www.oxfordeo.com/) is an earth observation water risk company. This repository builds and deploys OxEO's data pipeline Flows via Prefect. OxEO's data service is comprised of three repos: [oxeo-flows](https://github.com/oxfordeo/oxeo-flows), [oxeo-water](https://github.com/oxfordeo/oxeo-water), and [oxeo-api](https://github.com/oxfordeo/oxeo-api). This work was generously supported by the [European Space Agency Φ-lab](https://philab.esa.int/) and [World Food Programme (WFP) Innovation Accelerator](https://innovation.wfp.org/) as part of the [EO & AI for SDGs Innovation Initiative](https://wfpinnovation.medium.com/how-can-earth-observation-and-artificial-intelligence-help-people-in-need-5e56efc5c061).
+
+Copyright © 2022 Oxford Earth Observation Ltd.
+
+---
+
 # oxeo-water
-A research repository for water inference
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A research repository for water inference in multi-spectral earth observation imagery: Landsat-5, Landsat-7, Landsat-8, and Sentinel-2.
+
+
 
 ## Installation
+
+This repo is shipped with several installation options: `dev`, `ml`, `sql`, and `graph`.
+
+In general, any option can be installed using `pip`:
+
 ```
-pip install .
+pip install .[<option>]
 ```
 
-## Development
+### Machine Learning (ml)
+
+The `ml` option installs all the prerequisites for machine learning training and inference.
+Machine learning training uses [hydra](https://hydra.cc/docs/intro/) for configuration management, [pytorch](https://pytorch.org/) and [pytorch-lightning](https://www.pytorchlightning.ai/) for training, [weights-and-biases](https://wandb.ai/site) for logging and MLOps, and Google Cloud Storage for storing checkpoints.
+
+### Database options (sql & graph)
+
+The `sql` option enables training and inference to communicate with a PostgreSQL database. The `graph` option is experimental and is for building a graph database instead of a conventional relational database.
+
+### Development
+
+The `dev` option install pre-commit, diagnostics, and testing packages.
+Use it when setting up this repo for development and contributions.
+
 ```
 pip install -e .[dev]
 pre-commit install
@@ -17,7 +47,7 @@ Run tests:
 tox
 ```
 
-## Training
+## Useage: Training
 
 The model training is fully configurable with hydra. The configs are divided in modules in oxeo/water/configs.
 There you can define configs for datamodule, trainer, etc.
@@ -55,7 +85,7 @@ And that's all! It will store the results on `Wandb` and automatically train fro
 If you want to continue training an existing model you just have to define the `resume_from_checkpoint` parameter.
 An example can be found in `unet_semseg_all_tiles_ft.yaml`
 
-## Prediction
+## Useage: Prediction
 ### Local
 If you need to run a local prediction you can use the notebook `Unet Predictor` as a starting example.
 ### Prefect
